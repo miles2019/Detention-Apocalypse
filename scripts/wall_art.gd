@@ -5,6 +5,7 @@ extends Node2D
 ## kind: "back" (1600x210 px Weltmaß) oder "side" (825x150).
 
 var kind := "back"
+var style := "classroom"
 var size := Vector2(1600, 210)
 
 func _draw() -> void:
@@ -12,7 +13,14 @@ func _draw() -> void:
 	rng.seed = 7 if kind == "back" else 11
 	var w := size.x
 	var h := size.y
-	draw_rect(Rect2(0, 0, w, h), Color(0.87, 0.84, 0.64))
+	var base := Color(0.87, 0.84, 0.64)
+	if style == "yard":
+		base = Color(0.78, 0.45, 0.34)
+	if style == "lab":
+		base = Color(0.82, 0.9, 0.86)
+	elif style == "library":
+		base = Color(0.5, 0.36, 0.28)
+	draw_rect(Rect2(0, 0, w, h), base)
 	# Schmutz-Verläufe
 	for i in 24:
 		draw_rect(Rect2(rng.randf_range(0, w), rng.randf_range(0, h * 0.7), rng.randf_range(30, 120), rng.randf_range(10, 40)), Color(0.7, 0.66, 0.46, 0.18))
@@ -21,7 +29,13 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 16, w, 5), Color(0.2, 0.36, 0.4))
 	draw_rect(Rect2(0, h * 0.72, w, h * 0.28), Color(0.3, 0.46, 0.46))
 	draw_rect(Rect2(0, h * 0.72, w, 5), Color(0.55, 0.7, 0.66))
-	if kind == "back":
+	if style == "yard":
+		_yard(rng)
+	elif style == "lab":
+		_lab(rng)
+	elif style == "library":
+		_library(rng)
+	elif kind == "back":
 		_back(rng)
 	else:
 		_side(rng)
@@ -125,3 +139,96 @@ func _side(rng: RandomNumberGenerator) -> void:
 	draw_rect(Rect2(680, 50, 100, 64), Color(0.55, 0.38, 0.2))
 	draw_rect(Rect2(686, 56, 88, 52), Color(0.78, 0.6, 0.35))
 	draw_rect(Rect2(694, 62, 28, 34), Color(0.95, 0.95, 0.9))
+
+func _yard(rng: RandomNumberGenerator) -> void:
+	var w := size.x
+	var h := size.y
+	# Backsteine
+	var row := 0
+	var y := 22.0
+	while y < h:
+		var x := -20.0 if row % 2 == 0 else 0.0
+		while x < w:
+			draw_rect(Rect2(x + 1, y + 1, 38, 12), Color(0.8 + rng.randf_range(-0.06, 0.06), 0.46 + rng.randf_range(-0.05, 0.05), 0.34))
+			x += 40.0
+		y += 14.0
+		row += 1
+	# zwei Fensterreihen
+	for r in 2:
+		for c in 9:
+			var wx := 60.0 + c * 170.0
+			var wy := 34.0 + r * 80.0
+			if r == 1 and c in [4]:
+				continue
+			draw_rect(Rect2(wx - 4, wy - 4, 78, 62), Color(0.95, 0.93, 0.85))
+			draw_rect(Rect2(wx, wy, 70, 54), Color(0.45, 0.7, 0.85))
+			draw_line(Vector2(wx + 35, wy), Vector2(wx + 35, wy + 54), Color(0.95, 0.93, 0.85), 4.0)
+			draw_line(Vector2(wx, wy + 27), Vector2(wx + 70, wy + 27), Color(0.95, 0.93, 0.85), 4.0)
+	# Doppeltür mit Schild
+	var dx := 800.0 - 55.0
+	draw_rect(Rect2(dx - 6, 100, 122, 110), Color(0.3, 0.2, 0.15))
+	draw_rect(Rect2(dx, 106, 52, 104), Color(0.35, 0.55, 0.65))
+	draw_rect(Rect2(dx + 58, 106, 52, 104), Color(0.35, 0.55, 0.65))
+	draw_rect(Rect2(700, 62, 200, 30), Color(0.95, 0.9, 0.7))
+	draw_string(ThemeDB.fallback_font, Vector2(730, 86), "SCHULE", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(0.2, 0.15, 0.1))
+
+func _lab(rng: RandomNumberGenerator) -> void:
+	var w := size.x
+	var h := size.y
+	# Fliesen-Raster an der Wand
+	var gx := 0.0
+	while gx < w:
+		draw_line(Vector2(gx, 22), Vector2(gx, h * 0.72), Color(0.6, 0.72, 0.68, 0.5), 2.0)
+		gx += 50.0
+	# Vitrinen mit Kolben
+	var cabinets := 4 if kind == "back" else 2
+	for c in cabinets:
+		var x := 40.0 + c * (w / float(cabinets)) if kind == "back" else 60.0 + c * 330.0
+		draw_rect(Rect2(x, 44, 170, 104), Color(0.35, 0.45, 0.5))
+		draw_rect(Rect2(x + 6, 50, 158, 92), Color(0.75, 0.9, 0.95, 0.85))
+		draw_line(Vector2(x + 6, 96), Vector2(x + 164, 96), Color(0.35, 0.45, 0.5), 3.0)
+		for k in 6:
+			var cx := x + 22 + k * 25.0
+			var col: Color = [Color(0.4, 0.9, 0.4), Color(0.9, 0.4, 0.8), Color(0.4, 0.7, 1.0), Color(1.0, 0.8, 0.3)][rng.randi() % 4]
+			draw_circle(Vector2(cx, 82), 9, col)
+			draw_rect(Rect2(cx - 3, 66, 6, 10), Color(0.8, 0.9, 0.95))
+			draw_circle(Vector2(cx, 130), 8, col)
+	if kind == "back":
+		# Periodensystem-Poster und Warnschilder
+		draw_rect(Rect2(700, 44, 200, 88), Color(0.95, 0.95, 0.9))
+		for r in 4:
+			for c in 9:
+				draw_rect(Rect2(706 + c * 21, 50 + r * 20, 18, 17), [Color(0.9, 0.5, 0.5), Color(0.5, 0.8, 0.9), Color(0.9, 0.9, 0.4), Color(0.6, 0.9, 0.6)][(r + c) % 4])
+		for sx in [1100.0, 1400.0]:
+			var tri := PackedVector2Array([Vector2(sx, 50), Vector2(sx - 30, 104), Vector2(sx + 30, 104)])
+			draw_colored_polygon(tri, Color(1.0, 0.85, 0.1))
+			draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), Color(0.1, 0.1, 0.1), 3.0)
+			draw_string(ThemeDB.fallback_font, Vector2(sx - 7, 96), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color(0.1, 0.1, 0.1))
+
+func _library(rng: RandomNumberGenerator) -> void:
+	var w := size.x
+	var h := size.y
+	# Bücherregale über die gesamte Wand
+	var shelf_cols := int(w / 120.0)
+	for c in shelf_cols:
+		var x := c * 120.0
+		draw_rect(Rect2(x + 4, 24, 112, h * 0.7), Color(0.35, 0.22, 0.14))
+		for row in 4:
+			var y := 30.0 + row * 34.0
+			draw_rect(Rect2(x + 8, y + 28, 104, 4), Color(0.25, 0.15, 0.1))
+			var bx := x + 10.0
+			while bx < x + 108.0:
+				var bw := rng.randf_range(7.0, 14.0)
+				var bh := rng.randf_range(18.0, 27.0)
+				var col := Color.from_hsv(rng.randf(), rng.randf_range(0.4, 0.8), rng.randf_range(0.5, 0.85))
+				draw_rect(Rect2(bx, y + 28.0 - bh, bw, bh), col)
+				bx += bw + 1.0
+	# Gemälde und Fenster mit Mond
+	if kind == "back":
+		draw_rect(Rect2(380, 40, 120, 90), Color(0.7, 0.55, 0.2))
+		draw_rect(Rect2(388, 48, 104, 74), Color(0.2, 0.3, 0.45))
+		draw_circle(Vector2(440, 82), 18, Color(0.95, 0.95, 0.7))
+		draw_rect(Rect2(1050, 40, 120, 90), Color(0.7, 0.55, 0.2))
+		draw_rect(Rect2(1058, 48, 104, 74), Color(0.35, 0.5, 0.35))
+
+# ---------------- Rest

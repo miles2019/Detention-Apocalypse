@@ -34,6 +34,10 @@ var slow_t := 0.0
 var knock_vel := Vector2.ZERO
 var move_input := Vector2.ZERO
 var dead := false
+var combo_n := 0
+var combo_t := 0.0
+var aim_point := Vector2.ZERO
+var companion: Node = null
 
 var _idle_t := 0.0
 var _step_t := 0.0
@@ -65,8 +69,26 @@ func _ready() -> void:
 	_hand.position = Vector3(0.0, 0.3, 0.05)
 	add_to_group("player")
 	Game.player = self
-	equip("mop")
+	# Meta-Fortschritt aus dem Skilltree (Alte Tafel)
+	max_hp += Save.bonus("max_hp")
+	speed_bonus += Save.bonus("speed")
+	dmg_mult += Save.bonus("dmg")
+	crit += Save.bonus("crit")
+	magnet += Save.bonus("magnet")
+	slots += int(Save.bonus("slots"))
+	var start: String = Save.data.start_weapon
+	if not Game.arena.hub_mode:
+		equip(start if Db.weapons.has(start) else "mop")
 	hp = max_hp
+	if not Game.arena.hub_mode:
+		Game.add_money(int(Save.bonus("start_money")))
+	if Save.data.ag_selected != "" and Db.ags.has(Save.data.ag_selected):
+		companion = Companion.new()
+		companion.kind = Save.data.ag_selected
+		companion.owner_player = self
+		Game.arena.entities.add_child(companion)
+		if companion.kind == "hamster":
+			magnet += 80.0
 
 func _physics_process(delta: float) -> void:
 	if dead:
@@ -75,6 +97,9 @@ func _physics_process(delta: float) -> void:
 	iframes = maxf(0.0, iframes - delta)
 	dash_t = maxf(0.0, dash_t - delta)
 	dash_cd = maxf(0.0, dash_cd - delta)
+	combo_t = maxf(0.0, combo_t - delta)
+	if combo_t <= 0.0 and combo_n > 0:
+		combo_n = 0
 	dash_inv = maxf(0.0, dash_inv - delta)
 	stun_t = maxf(0.0, stun_t - delta)
 	slow_t = maxf(0.0, slow_t - delta)
@@ -105,6 +130,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	velocity = keep if dash_t <= 0.0 else velocity
 	_update_visual(delta)
+	if Input.is_action_just_pressed("interact"):
+		_interact()
 	for w in weapons:
 		w.update(delta)
 
@@ -117,8 +144,11 @@ func _update_aim() -> void:
 	if stick.length() > 0.3:
 		aim_dir = stick.normalized()
 		manual_aim = true
+		aim_point = global_position + aim_dir * 320.0
 		return
-	var m: Vector2 = Game.arena.stage.mouse_to_world() - global_position
+	var mw: Vector2 = Game.arena.stage.mouse_to_world()
+	aim_point = mw
+	var m: Vector2 = mw - global_position
 	if m.length() > 6.0:
 		aim_dir = m.normalized()
 	manual_aim = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Game.state == Game.State.IN_RUN
@@ -187,7 +217,7 @@ func _afterimage() -> void:
 	var stage: Stage3D = Game.arena.stage
 	var g := Billboard3D.new()
 	stage.sprites.add_child(g)
-	g.setup(rig.sprite.texture, rig.base_height)
+	g.setup(rig.sprite.texture, rig.base_height, false)
 	g.place(global_position, 0.0)
 	g.set_body(Vector2(_face, 1.0), 0.0)
 	g.set_tint(Color(0.6, 0.85, 1.0, 0.6))
@@ -200,7 +230,7 @@ func _start_dash(input: Vector2) -> void:
 	dash_dir = input if input != Vector2.ZERO else aim_dir
 	dash_t = 0.17
 	dash_inv = 0.26
-	dash_cd = 0.85
+	dash_cd = 0.85 * (1.0 - Save.bonus("dash_cd"))
 	Sfx.play("dash", randf_range(0.95, 1.1), -4.0)
 	Juice.burst(global_position, Color(0.95, 0.95, 0.9, 0.8), 12, 150.0, 0.55, 4.5, 70.0, -dash_dir, 0.0, "circle", 6.0)
 	# Perfektes Ausweichen: kurz vor einer Gefahr
@@ -217,6 +247,17 @@ func _start_dash(input: Vector2) -> void:
 		Juice.float_text_at(global_position, 80, "Sportlich!", Color(0.6, 0.9, 1.0), 20, true)
 		Juice.ring(global_position, 70.0, Color(0.6, 0.9, 1.0), 0.3, 4.0)
 		Sfx.play("perfect")
+
+func _interact() -> void:
+	var best: Node = null
+	var bd := 120.0
+	for o in get_tree().get_nodes_in_group("interactable"):
+		var d: float = o.global_position.distance_to(global_position)
+		if d < bd:
+			bd = d
+			best = o
+	if best != null:
+		best.interact(self)
 
 # ---------------------------------------------------------------- Status
 func is_targetable() -> bool:
@@ -245,6 +286,8 @@ func roll_damage(base: float, crit_bonus: float) -> Dictionary:
 func take_damage(amount: float, from_pos: Vector2, area: bool = false) -> bool:
 	if dead or Game.god_mode or iframes > 0.0 or dash_inv > 0.0:
 		return false
+	amount *= Game.phase_mod("enemy_dmg")
+	amount *= 1.0 + 0.15 * float(Game.difficulty)
 	hp -= amount
 	iframes = 0.75
 	Game.stats.damage_taken += amount
@@ -278,6 +321,18 @@ func heal(v: float) -> void:
 		Game.player_hurt.emit()
 
 func _die() -> void:
+	if Save.bonus("revive") > 0.0 and not Game.stats.revived:
+		Game.stats.revived = true
+		hp = max_hp * 0.5
+		iframes = 2.5
+		Juice.float_text_at(global_position, 90.0, "Entschuldigungszettel!", Color(1, 0.95, 0.5), 22, true)
+		Game.stamp_requested.emit("Entschuldigt!", Color(0.2, 0.7, 0.3))
+		Juice.ring(global_position, 160.0, Color(1, 0.95, 0.5), 0.5, 8.0, true)
+		Sfx.play("levelup")
+		for e in Game.enemies:
+			if is_instance_valid(e) and not e.dead and e.global_position.distance_to(global_position) < 200.0:
+				e.kb_vel += (e.global_position - global_position).normalized() * 600.0
+		return
 	dead = true
 	rig.flash(0.3, Color(1, 0.2, 0.2))
 	Juice.slowmo(0.7, 0.2)
@@ -289,6 +344,15 @@ func _die() -> void:
 	Game.end_run(false)
 
 # ---------------------------------------------------------------- Waffen & Upgrades
+func combo_mult() -> float:
+	return minf(2.6, 1.0 + 0.12 * float(combo_n))
+
+func combo_hit() -> void:
+	combo_n += 1
+	combo_t = 1.8
+	if combo_n >= 4 and combo_n % 4 == 0:
+		Juice.float_text_at(global_position, 100.0, "x%.1f" % combo_mult(), Color(0.7, 1.0, 0.7), 18, true)
+
 func get_weapon(id: String) -> WeaponRunner:
 	for w in weapons:
 		if w.data.id == id:
@@ -310,6 +374,7 @@ func equip(id: String) -> bool:
 		return false
 	var w := WeaponRunner.new(Db.weapons[id], self)
 	weapons.append(w)
+	Save.discover("weapons", id)
 	_held.texture = Db.tex(weapons[0].data.icon)
 	_held.pixel_size = 36.0 * Stage3D.S / float(_held.texture.get_height())
 	_after_inventory()
@@ -385,8 +450,11 @@ func evolve(recipe: Dictionary) -> void:
 	var b := get_weapon(recipe.b)
 	if a == null or b == null:
 		return
+	a.free_visuals()
+	b.free_visuals()
 	weapons.erase(a)
 	weapons.erase(b)
+	Save.discover("evolutions", recipe.result)
 	var w := WeaponRunner.new(Db.weapons[recipe.result], self)
 	w.first_use = true
 	w.timer = 0.2

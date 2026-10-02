@@ -15,6 +15,13 @@ var waves := []
 var evolutions := []   # {a, b, result}
 var levelup_pool := ["atk_speed", "move_speed", "max_hp", "crit", "proj", "magnet", "dmg", "heal"]
 var lines := {}
+var events := {}
+var skills := {}
+var chapters := {}
+var challenges := {}
+var ags := {}
+var start_weapon_cost := {}
+const INITIAL_WEAPONS := ["mop", "water", "bunsen", "blowpipe", "chalk", "stapler", "megaphone", "compass"]
 var _tex_cache := {}
 
 func _ready() -> void:
@@ -24,6 +31,7 @@ func _ready() -> void:
 	_build_phases()
 	_build_waves()
 	_build_lines()
+	DbExtra.build(self)
 
 func tex(path: String) -> Texture2D:
 	if path == "":
@@ -67,10 +75,10 @@ func subject_color(subject: String) -> Color:
 		"Kunst": return Color("ff6fa8")
 		_: return Color("d8d8d8")
 
-func _w(id: String, name: String, subject: String, kind: String, dmg: float, cd: float, reach: float, icon: int, color: Color, desc: String, price: int, extra := {}) -> WeaponData:
+func _w(id: String, name: String, subject: String, kind: String, dmg: float, cd: float, reach: float, icon: Variant, color: Color, desc: String, price: int, extra := {}) -> WeaponData:
 	var d := WeaponData.new()
 	d.id = id; d.display_name = name; d.subject = subject; d.kind = kind
-	d.damage = dmg; d.cooldown = cd; d.reach = reach; d.icon = W % icon
+	d.damage = dmg; d.cooldown = cd; d.reach = reach; d.icon = icon if icon is String else W % int(icon)
 	d.color = color; d.desc = desc; d.price = price
 	for k in extra:
 		d.set(k, extra[k])
@@ -105,8 +113,7 @@ func _build_weapons() -> void:
 	_w("steam", "Dampf-Kanone", "Chemie", "steam", 10, 2.4, 330, 15, Color("e8f4ff"),
 		"EVOLUTION: Riesige Dampfwolke schmilzt Gegnergruppen und drückt sie weg.", 0,
 		{knockback = 320.0, evolution = true, fire_sfx = "shoot_steam", proj_icon = P % 9, tags = PackedStringArray(["area", "fire", "water"])})
-	var e := {"a": "bunsen", "b": "water", "result": "steam"}
-	evolutions.append(e)
+	evolutions.append({"a": "bunsen", "b": "water", "result": "steam"})
 
 func _en(id: String, name: String, hp: float, speed: float, dmg: float, tex_files: Array, height: float, behavior: String, extra := {}) -> EnemyData:
 	var d := EnemyData.new()
@@ -183,7 +190,7 @@ func _build_phases() -> void:
 		"Projektile prallen 2x häufiger ab und fliegen schneller.",
 		"Liebe Klasse, heute Physik! Newtons Gesetze gelten auch für Hausmeister.",
 		{bounce = 2, proj_speed = 1.15})
-	_ph("Sport", "Sport", 29, Color(1.04, 0.95, 0.86),
+	_ph("Sport", "Sport", 29, Color(1.02, 0.97, 0.91),
 		"Alle bewegen sich schneller, Rückstoß +60 %.",
 		"Sportunterricht! Bitte alle Schuhe binden. Auch die Mutanten.",
 		{speed = 1.25, kb = 1.6})
@@ -207,5 +214,7 @@ func _build_lines() -> void:
 		"wave": ["Eine Durchsage: Wer nicht pünktlich zum Unterricht erscheint, bekommt einen Eintrag.", "Herr Scrubbs, die Flure sind immer noch nicht gewischt!", "Hier spricht der Rektor: Die Pausenaufsicht ist leider verhindert."],
 		"chaos": ["Eine kurze Information für die Bio-Klasse: Herr Scrubbs eignet sich hervorragend als Anschauungsobjekt.", "Pädagogisch bedenklich, Herr Scrubbs. Pädagogisch bedenklich.", "Wer ihn erledigt, bekommt eine 1+ mit Sternchen!"],
 		"boss": ["Herr Scrubbs! Da Sie die Flure nicht gewischt haben, setze ich Frau Eisenhart aus der Sporthalle auf Sie an. Sie bekommen eine glatte 6 in Betragen!"],
+		"boss_2": ["Herr Scrubbs! Professor Ätz hat seine Formel verbessert und sich dabei gleich mit. Das Ergebnis dürfen Sie später aufwischen."],
+		"boss_3": ["Herr Scrubbs, hier spricht der Rektor persönlich. Ihr Hausmeistervertrag endet in diesem Raum. Leider ebenso Sie."],
 		"win": ["Das... das war nicht im Lehrplan."],
 	}

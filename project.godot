@@ -22,6 +22,7 @@ run/max_fps=144
 [autoload]
 
 Db="*res://scripts/autoload/database.gd"
+Save="*res://scripts/autoload/save.gd"
 Game="*res://scripts/autoload/game.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
 Juice="*res://scripts/autoload/juice.gd"

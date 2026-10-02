@@ -11,22 +11,42 @@ var _star_t := 0.0
 var _top := 60.0
 
 static var _shader: Shader
+static var _shadow_shader: Shader
+var shadow_pivot: Node3D
+var shadow: Sprite3D
+var _shadow_mat: ShaderMaterial
+var _lift := 0.0
 static var _star_tex: Texture2D
 
-func setup(tex: Texture2D, height_px: float) -> void:
+func setup(tex: Texture2D, height_px: float, with_shadow: bool = true) -> void:
 	if _shader == null:
 		_shader = load("res://effects/flash3d.gdshader")
+		_shadow_shader = load("res://effects/shadow3d.gdshader")
 	sprite = Sprite3D.new()
 	sprite.shaded = false
 	sprite.double_sided = true
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
-	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	sprite.rotation.x = -Stage3D.CAM_ELEV * 0.82   # leicht zur Kamera geneigt, damit die Figuren nicht gestaucht wirken
 	add_child(sprite)
 	mat = ShaderMaterial.new()
 	mat.shader = _shader
 	sprite.material_override = mat
 	_top = height_px
+	if with_shadow:
+		# Silhouetten-Schatten: flach liegendes Abbild des Sprites, vom Fußpunkt nach hinten-rechts geworfen
+		shadow_pivot = Node3D.new()
+		shadow_pivot.rotation.y = -0.38
+		add_child(shadow_pivot)
+		shadow = Sprite3D.new()
+		shadow.shaded = false
+		shadow.double_sided = true
+		shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		shadow.rotation.x = -PI / 2.0
+		shadow_pivot.add_child(shadow)
+		_shadow_mat = ShaderMaterial.new()
+		_shadow_mat.shader = _shadow_shader
+		shadow.material_override = _shadow_mat
 	set_tex(tex, height_px)
 
 func set_tex(tex: Texture2D, height_px: float = -1.0) -> void:
@@ -38,13 +58,25 @@ func set_tex(tex: Texture2D, height_px: float = -1.0) -> void:
 	sprite.centered = true
 	sprite.offset = Vector2(0, tex.get_height() * 0.5)
 	mat.set_shader_parameter("tex", tex)
+	if shadow != null:
+		shadow.texture = tex
+		shadow.pixel_size = s
+		shadow.centered = true
+		shadow.offset = Vector2(0, tex.get_height() * 0.5)
+		_shadow_mat.set_shader_parameter("tex", tex)
 
 func place(p2: Vector2, lift_px: float = 0.0) -> void:
 	position = Vector3(p2.x * Stage3D.S, lift_px * Stage3D.S, p2.y * Stage3D.S)
+	_lift = lift_px
+	if shadow_pivot != null:
+		shadow_pivot.position.y = -lift_px * Stage3D.S + 0.006
+		_shadow_mat.set_shader_parameter("opacity", 0.62 * (1.0 - clampf(lift_px / 90.0, 0.0, 0.65)))
 
 func set_body(scale2: Vector2, rot: float) -> void:
 	sprite.scale = Vector3(scale2.x, scale2.y, 1.0)
 	sprite.rotation.z = rot
+	if shadow != null:
+		shadow.scale = Vector3(scale2.x * (1.0 + _lift * 0.004), 0.95 * scale2.y, 1.0)
 
 func set_flash(v: float, color: Color = Color.WHITE) -> void:
 	mat.set_shader_parameter("flash", v)
@@ -52,6 +84,8 @@ func set_flash(v: float, color: Color = Color.WHITE) -> void:
 
 func set_tint(c: Color) -> void:
 	mat.set_shader_parameter("tint", c)
+	if _shadow_mat != null:
+		_shadow_mat.set_shader_parameter("opacity", 0.62 * c.a * (1.0 - clampf(_lift / 90.0, 0.0, 0.65)))
 
 func set_light(c: Color) -> void:
 	mat.set_shader_parameter("light_tint", c)

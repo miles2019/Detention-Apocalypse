@@ -1,7 +1,7 @@
 extends Node
 ## GameManager: Spielzustand, Run-Daten, Signale. UI sendet Signale, hier wird der Zustand geändert.
 
-enum State { MAIN_MENU, CHARACTER_SELECT, IN_RUN, WAVE_TRANSITION, LEVEL_UP, SHOP, BOSS_INTRO, PAUSE, RUN_RESULT }
+enum State { MAIN_MENU, CHARACTER_SELECT, IN_RUN, WAVE_TRANSITION, LEVEL_UP, SHOP, BOSS_INTRO, PAUSE, RUN_RESULT, HUB }
 
 signal state_changed(old_state: int, new_state: int)
 signal money_changed(value: int)
@@ -18,6 +18,10 @@ signal run_ended(won: bool)
 signal inventory_changed
 signal boss_changed(hp: float, max_hp: float, active: bool)
 signal synergy_changed(subject: String, count: int)
+signal cinematic_bars(on: bool)
+signal boss_title(name: String, title: String, intro: String)
+signal stage_clear
+signal station_activated(kind: String)
 
 const TOTAL_WAVES := 5
 const PAUSING_STATES := [State.LEVEL_UP, State.SHOP, State.BOSS_INTRO, State.PAUSE, State.RUN_RESULT]
@@ -36,14 +40,20 @@ var phase_id := ""
 var phase_mods := {}
 var pending_levelups := 0
 var god_mode := false
+var rule_block := ""            # vom Rektor verhängte Regel: "melee" | "ranged" | ""
+var event_mods := {}            # aktive Wellen-Event-Modifikatoren
+var chapter := 1
+var modal_open := false
+var difficulty := 0
 var run_won := false
+var last_rewards := {}
 var stats := {}
 var chain := 0
 var _last_kill_ms := 0
 var settings := {master = 0.8, music = 0.55, sfx = 0.9, voice = 0.9, shake = 1.0, ui_scale = 1.0, reduced_motion = false}
 const ACTIONS := {
 	move_left = "Links", move_right = "Rechts", move_up = "Hoch", move_down = "Runter",
-	dash = "Ausweichen",
+	interact = "Interagieren", dash = "Ausweichen",
 }
 
 func _ready() -> void:
@@ -57,7 +67,7 @@ func _setup_input() -> void:
 	var defaults := {
 		move_left = [KEY_A, KEY_LEFT], move_right = [KEY_D, KEY_RIGHT],
 		move_up = [KEY_W, KEY_UP], move_down = [KEY_S, KEY_DOWN],
-		dash = [KEY_SPACE, KEY_SHIFT], pause = [KEY_ESCAPE],
+		interact = [KEY_E], dash = [KEY_SPACE, KEY_SHIFT], pause = [KEY_ESCAPE],
 	}
 	for a in defaults:
 		if not InputMap.has_action(a):
@@ -70,6 +80,7 @@ func _setup_input() -> void:
 	_joy_axis("move_right", JOY_AXIS_LEFT_X, 1.0)
 	_joy_axis("move_up", JOY_AXIS_LEFT_Y, -1.0)
 	_joy_axis("move_down", JOY_AXIS_LEFT_Y, 1.0)
+	_joy_button("interact", JOY_BUTTON_X)
 	_joy_button("dash", JOY_BUTTON_A)
 	_joy_button("pause", JOY_BUTTON_START)
 	for a in ["aim_left", "aim_right", "aim_up", "aim_down"]:
@@ -146,9 +157,11 @@ func reset_run() -> void:
 	pending_levelups = 0
 	chain = 0
 	run_won = false
+	rule_block = ""
+	event_mods = {}
 	enemies.clear()
 	stats = {kills = 0, damage_dealt = 0.0, damage_taken = 0.0, objects_used = 0, dodges = 0,
-		max_chain = 0, money_earned = 0, time = 0.0, crits = 0, synergies = 0, waves = 0}
+		max_chain = 0, money_earned = 0, events = 0, flawless = 0, elites = 0, bosses = 0, revived = false, time = 0.0, crits = 0, synergies = 0, waves = 0}
 
 func xp_needed(lv: int = -1) -> int:
 	if lv < 0:
@@ -169,6 +182,7 @@ func spend_money(v: int) -> bool:
 	return true
 
 func add_xp(v: int) -> void:
+	v = int(round(float(v) * (1.0 + Save.bonus("xp")) * phase_mod("xp")))
 	xp += v
 	while xp >= xp_needed():
 		xp -= xp_needed()
@@ -180,6 +194,11 @@ func add_xp(v: int) -> void:
 func _check_levelup() -> void:
 	if pending_levelups > 0 and (state == State.IN_RUN or state == State.WAVE_TRANSITION):
 		levelup_return = state
+		if player != null and arena != null:
+			Juice.ring(player.global_position, 200.0, Color(1, 0.9, 0.4), 0.5, 10.0, true)
+			Juice.burst(player.global_position, Color(1, 0.9, 0.4), 22, 300.0, 0.9, 4.0, 180.0, Vector2.UP, 200.0, "circle", 30.0)
+			Juice.float_text_at(player.global_position, 100.0, "LEVEL UP!", Color(1, 0.9, 0.4), 28, true)
+			arena.stage.pulse_light(player.global_position, Color(1, 0.9, 0.5), 2.0, 3.5, 0.4)
 		change_state(State.LEVEL_UP)
 		levelup_requested.emit()
 
@@ -192,6 +211,7 @@ func register_kill() -> void:
 		chain = 1
 	_last_kill_ms = now
 	stats.max_chain = max(stats.max_chain, chain)
+	Save.add_stat("chain_max", chain)
 	if chain >= 2:
 		chain_event.emit(chain)
 
@@ -208,7 +228,13 @@ func nearest_enemy(pos: Vector2, max_dist: float = 99999.0, exclude: Array = [])
 	return best
 
 func phase_mod(key: String, default: float = 1.0) -> float:
-	return phase_mods.get(key, default)
+	var v: float = phase_mods.get(key, default)
+	if event_mods.has(key):
+		v *= event_mods[key]
+	return v
+
+func chapter_data() -> Dictionary:
+	return Db.chapters[chapter]
 
 func change_state(s: int) -> void:
 	if s == state:
@@ -223,6 +249,7 @@ func change_state(s: int) -> void:
 func end_run(won: bool) -> void:
 	if state == State.RUN_RESULT:
 		return
+	_award(won)
 	run_won = won
 	pending_levelups = 0
 	run_ended.emit(won)
@@ -236,7 +263,9 @@ func set_phase(id: String) -> void:
 # ---------------------------------------------------------------- Eingabe global
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
-		if state == State.IN_RUN or state == State.WAVE_TRANSITION:
+		if modal_open:
+			return
+		if state == State.IN_RUN or state == State.WAVE_TRANSITION or state == State.HUB:
 			state_before_pause = state
 			change_state(State.PAUSE)
 		elif state == State.PAUSE:
@@ -252,3 +281,34 @@ func _unhandled_input(event: InputEvent) -> void:
 						e.take_hit(9999.0, Vector2.RIGHT, 100.0, false)
 			KEY_F4: god_mode = not god_mode
 			KEY_F5: player.debug_give_evolution()
+
+## Run-Ende: Meta-Belohnungen berechnen, Challenges und Freischaltungen verbuchen, speichern.
+func _award(won: bool) -> void:
+	var diff_mul := 1.0 + 0.3 * float(difficulty)
+	var chap: Dictionary = Db.chapters[chapter]
+	var passes := int((float(stats.waves) * 2.0 + float(stats.kills) / 30.0 + (8.0 * chap.reward if won else 0.0)) * diff_mul)
+	var marken := int(stats.elites + (3 if won else 0))
+	var unlocks: Array = []
+	Save.data.runs += 1
+	Save.data.total_kills += stats.kills
+	Save.data.total_dodges += stats.dodges
+	Save.data.total_coins += stats.money_earned
+	Save.add_stat("kills", stats.kills)
+	Save.add_stat("dodges", stats.dodges)
+	Save.add_stat("coins", stats.money_earned)
+	Save.add_stat("level_max", level)
+	var best: Dictionary = Save.data.best
+	best.wave = maxi(best.wave, stats.waves)
+	best.kills = maxi(best.kills, stats.kills)
+	if won:
+		Save.data.wins += 1
+		best.time = minf(best.time, stats.time)
+		Save.data.chapter_clears[str(chapter)] = int(Save.data.chapter_clears.get(str(chapter), 0)) + 1
+		Save.add_stat("chapter%d" % chapter, 1)
+		if chapter < 3 and not Save.chapter_unlocked(chapter + 1):
+			Save.unlock_chapter(chapter + 1)
+			unlocks.append("Kapitel %d freigeschaltet: %s" % [chapter + 1, Db.chapters[chapter + 1].name])
+	Save.data.passes += passes
+	Save.data.marken += marken
+	last_rewards = {passes = passes, marken = marken, unlocks = unlocks}
+	Save.save_game()

@@ -22,14 +22,27 @@ func _ready() -> void:
 	UIKit.full(self)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	_title = UIKit.label("Pausenkiosk", 48, Color("f2e6c4"), HORIZONTAL_ALIGNMENT_LEFT, true)
-	_title.position = Vector2(50, 16)
-	add_child(_title)
-	_money = UIKit.label("", 28, Color(1, 0.88, 0.3), HORIZONTAL_ALIGNMENT_RIGHT, true)
-	_money.position = Vector2(780, 28)
-	_money.custom_minimum_size = Vector2(450, 0)
-	_money.size = Vector2(450, 40)
-	add_child(_money)
+	var banner := Panel.new()
+	banner.add_theme_stylebox_override("panel", UIKit.sbox("header_blue", 0))
+	banner.position = Vector2(36, 14)
+	banner.size = Vector2(700, 76)
+	add_child(banner)
+	_title = UIKit.label("Pausenkiosk", 40, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, true)
+	_title.position = Vector2(0, 8)
+	_title.size = Vector2(700, 56)
+	banner.add_child(_title)
+	var pill := Panel.new()
+	pill.add_theme_stylebox_override("panel", UIKit.sbox("panel_black", 6))
+	pill.position = Vector2(860, 24)
+	pill.size = Vector2(370, 58)
+	add_child(pill)
+	var coin := UIKit.icon(UIKit.ICON % "coins", Vector2(40, 40))
+	coin.position = Vector2(12, 9)
+	pill.add_child(coin)
+	_money = UIKit.label("", 26, Color(1, 0.9, 0.4), HORIZONTAL_ALIGNMENT_RIGHT, true)
+	_money.position = Vector2(60, 10)
+	_money.size = Vector2(290, 40)
+	pill.add_child(_money)
 	_row = HBoxContainer.new()
 	_row.add_theme_constant_override("separation", 18)
 	_row.position = Vector2(50, 92)
@@ -38,12 +51,16 @@ func _ready() -> void:
 	_inv.add_theme_constant_override("separation", 10)
 	_inv.position = Vector2(50, 560)
 	add_child(_inv)
-	_reroll_btn = UIKit.button("Radiergummi: neu würfeln", Vector2(330, 56), 20, Color("f7c8d8"))
-	_reroll_btn.position = Vector2(650, 600)
+	_reroll_btn = UIKit.button("Radiergummi: neu würfeln", Vector2(340, 58), 20, Color("f4b0d0"))
+	_reroll_btn.position = Vector2(600, 598)
 	_reroll_btn.pressed.connect(_reroll)
 	add_child(_reroll_btn)
-	var go := UIKit.button("Nächste Stunde", Vector2(260, 64), 28, Color("c8f0b8"))
-	go.position = Vector2(1000, 592)
+	var go := UIKit.button("Nächste Stunde", Vector2(280, 68), 28, Color("c8f0b8"))
+	go.icon = UIKit.tex_icon("adventure")
+	go.expand_icon = true
+	go.add_theme_constant_override("icon_max_width", 30)
+	go.add_theme_font_size_override("font_size", 25)
+	go.position = Vector2(960, 590)
 	go.pressed.connect(func():
 		if not _busy:
 			closed.emit())
@@ -66,7 +83,7 @@ func open() -> void:
 	_update_money()
 
 func _update_money() -> void:
-	_money.text = "Pausengeld: %d" % Game.money
+	_money.text = "%d" % Game.money
 	var cost := _reroll_cost()
 	_reroll_btn.text = "Radiergummi: neu würfeln (%d)" % cost
 	_reroll_btn.disabled = Game.money < cost
@@ -74,6 +91,8 @@ func _update_money() -> void:
 		_update_card_state(i)
 
 func _reroll_cost() -> int:
+	if _rerolls == 0 and Save.bonus("free_reroll") > 0.0:
+		return 0
 	return 3 + 2 * _rerolls
 
 # ---------------------------------------------------------------- Angebote
@@ -83,7 +102,7 @@ func _roll() -> void:
 	var cand: Array = []
 	for id in Db.weapons:
 		var wd: WeaponData = Db.weapons[id]
-		if wd.evolution:
+		if wd.evolution or not Save.weapon_unlocked(id):
 			continue
 		var owned: WeaponRunner = pl.get_weapon(id)
 		if owned != null and owned.level >= wd.max_level:
@@ -116,6 +135,7 @@ func _roll() -> void:
 		var price := wd.price + (Game.wave - 1)
 		if owned != null:
 			price = wd.price + owned.level * 4
+		price = maxi(1, int(round(float(price) * (1.0 - Save.bonus("discount")))))
 		_offers.append({kind = "weapon", id = id, price = price, sold = false})
 	var items: Array = []
 	for id in Db.upgrades:
@@ -128,7 +148,7 @@ func _roll() -> void:
 			break
 		var id: String = items.pop_front()
 		var u: UpgradeData = Db.upgrades[id]
-		_offers.append({kind = "item", id = id, price = u.price + int(Game.wave / 2), sold = false})
+		_offers.append({kind = "item", id = id, price = maxi(1, int(round(float(u.price + int(Game.wave / 2)) * (1.0 - Save.bonus("discount"))))), sold = false})
 
 func _build_cards() -> void:
 	for c in _row.get_children():
@@ -161,7 +181,9 @@ func _make_card(i: int) -> Control:
 	var o: Dictionary = _offers[i]
 	var card := PanelContainer.new()
 	card.custom_minimum_size = CARD
-	card.add_theme_stylebox_override("panel", UIKit.box(Color("fbf6e4"), Color("5a4630"), 5, 8, 12))
+	var csb := UIKit.sbox_new("card_cream", 10)
+	csb.content_margin_top = 6.0
+	card.add_theme_stylebox_override("panel", csb)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	card.add_child(v)
@@ -193,11 +215,15 @@ func _make_card(i: int) -> Control:
 	var sj := HBoxContainer.new()
 	sj.add_theme_constant_override("separation", 6)
 	sj.add_child(UIKit.icon(Db.subject_icon(subject), Vector2(26, 26)))
-	sj.add_child(UIKit.label(subject if subject != "" else "Allgemein", 15, Db.subject_color(subject).darkened(0.35)))
+	sj.add_child(UIKit.label(subject if subject != "" else "Allgemein", 16, Db.subject_color(subject).darkened(0.6)))
 	v.add_child(sj)
-	var ic := UIKit.icon(icon_path, Vector2(110, 100))
-	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	v.add_child(ic)
+	var slot := PanelContainer.new()
+	slot.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 8))
+	slot.custom_minimum_size = Vector2(112, 118)
+	slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var ic := UIKit.icon(icon_path, Vector2(86, 86))
+	slot.add_child(ic)
+	v.add_child(slot)
 	v.add_child(UIKit.label(name, 22, UIKit.NAVY, HORIZONTAL_ALIGNMENT_CENTER))
 	var d := UIKit.label(desc, 14, UIKit.INK, HORIZONTAL_ALIGNMENT_CENTER)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -214,7 +240,7 @@ func _make_card(i: int) -> Control:
 	pl.name = "Price"
 	pr.add_child(pl)
 	v.add_child(pr)
-	var b := UIKit.button("Kaufen", Vector2(200, 46), 22, Color("c8f0b8"))
+	var b := UIKit.button("Kaufen", Vector2(200, 50), 24, Color("c8f0b8"))
 	b.name = "Buy"
 	b.pressed.connect(func(): _buy(i))
 	v.add_child(b)
@@ -337,8 +363,8 @@ func _refresh_inventory() -> void:
 	_inv.add_child(UIKit.label("Dein Spind:", 20, Color("f2e6c4"), HORIZONTAL_ALIGNMENT_LEFT, true))
 	for i in pl.slots:
 		var p := PanelContainer.new()
-		p.add_theme_stylebox_override("panel", UIKit.box(Color(0.58, 0.66, 0.74), Color(0.1, 0.12, 0.18), 3, 4, 4))
-		p.custom_minimum_size = Vector2(70, 70)
+		p.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 6))
+		p.custom_minimum_size = Vector2(76, 82)
 		if i < pl.weapons.size():
 			var w: WeaponRunner = pl.weapons[i]
 			var vv := VBoxContainer.new()

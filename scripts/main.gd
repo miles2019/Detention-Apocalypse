@@ -1,9 +1,11 @@
 extends Node
 ## Main: verbindet UI-Screens mit den Spielzuständen aus Game. UI sendet Signale, Game ändert den Zustand.
+## Ablauf: Hauptmenü -> Schulhof (HUB) -> Direktorenschild -> Run -> Zeugnis -> Schulhof.
 
 var world: Node
 var ui: CanvasLayer
 var hud: HUD
+var hubhud: HubHUD
 var menu: MainMenu
 var charsel: CharSelect
 var settings: SettingsScreen
@@ -12,6 +14,11 @@ var shop: ShopScreen
 var pause: PauseScreen
 var result: ResultScreen
 var evo: EvolutionOverlay
+var skills: SkillScreen
+var workbench: WorkbenchScreen
+var board: BoardScreen
+var ags: AGScreen
+var director: DirectorScreen
 var arena: Arena
 var stage: Stage3D
 var _pending_recipe := {}
@@ -19,11 +26,14 @@ var _pending_recipe := {}
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().root.content_scale_factor = Game.settings.get("ui_scale", 1.0)
+	get_tree().root.theme = UIKit.make_theme()
 	world = Node.new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(world)
 	hud = HUD.new()
 	add_child(hud)
+	hubhud = HubHUD.new()
+	add_child(hubhud)
 	ui = CanvasLayer.new()
 	ui.layer = 10
 	add_child(ui)
@@ -35,14 +45,19 @@ func _ready() -> void:
 	result = ResultScreen.new()
 	settings = SettingsScreen.new()
 	evo = EvolutionOverlay.new()
-	for s in [menu, charsel, shop, levelup, pause, result, settings, evo]:
+	skills = SkillScreen.new()
+	workbench = WorkbenchScreen.new()
+	board = BoardScreen.new()
+	ags = AGScreen.new()
+	director = DirectorScreen.new()
+	for s in [menu, charsel, shop, levelup, pause, result, settings, evo, skills, workbench, board, ags, director]:
 		ui.add_child(s)
 		s.visible = false
-	menu.start_pressed.connect(func(): Game.change_state(Game.State.CHARACTER_SELECT))
+	menu.start_pressed.connect(_enter_hub)
 	menu.settings_pressed.connect(func(): settings.visible = true)
 	menu.quit_pressed.connect(func(): get_tree().quit())
-	charsel.back_pressed.connect(func(): Game.change_state(Game.State.MAIN_MENU))
-	charsel.confirmed.connect(func(_id): _start_run())
+	charsel.back_pressed.connect(_close_charsel)
+	charsel.confirmed.connect(_on_char_confirmed)
 	settings.closed.connect(func(): settings.visible = false)
 	levelup.chosen.connect(_on_upgrade_chosen)
 	shop.closed.connect(_on_shop_closed)
@@ -50,9 +65,11 @@ func _ready() -> void:
 	evo.finished.connect(_on_evolution_done)
 	pause.resume_pressed.connect(func(): Game.change_state(Game.state_before_pause))
 	pause.settings_pressed.connect(func(): settings.visible = true)
-	pause.quit_to_menu_pressed.connect(_to_menu)
+	pause.quit_to_menu_pressed.connect(_on_pause_quit)
 	result.restart_pressed.connect(_start_run)
-	result.menu_pressed.connect(_to_menu)
+	result.menu_pressed.connect(_enter_hub)
+	director.start_requested.connect(_start_from_director)
+	Game.station_activated.connect(_on_station)
 	Game.state_changed.connect(_on_state)
 	Game.levelup_requested.connect(func(): levelup.open())
 	Game.run_ended.connect(func(won: bool): result.open(won))
@@ -66,16 +83,18 @@ func _ready() -> void:
 func _on_state(_old: int, s: int) -> void:
 	var S := Game.State
 	menu.visible = s == S.MAIN_MENU
-	charsel.visible = s == S.CHARACTER_SELECT
+	if s != S.HUB or not Game.modal_open:
+		charsel.visible = s == S.CHARACTER_SELECT or (charsel.visible and s == S.HUB and Game.modal_open)
 	shop.visible = s == S.SHOP
 	levelup.visible = s == S.LEVEL_UP
 	pause.visible = s == S.PAUSE
 	result.visible = s == S.RUN_RESULT
-	hud.visible = s in [S.IN_RUN, S.WAVE_TRANSITION, S.BOSS_INTRO, S.LEVEL_UP, S.PAUSE]
+	hud.visible = s in [S.IN_RUN, S.WAVE_TRANSITION, S.BOSS_INTRO, S.LEVEL_UP] or (s == S.PAUSE and Game.state_before_pause != S.HUB)
+	hubhud.visible = s == S.HUB or (s == S.PAUSE and Game.state_before_pause == S.HUB)
 	if s != S.PAUSE and s != S.MAIN_MENU:
 		settings.visible = false
 	match s:
-		S.MAIN_MENU, S.CHARACTER_SELECT:
+		S.MAIN_MENU, S.CHARACTER_SELECT, S.HUB:
 			Sfx.play_music("menu")
 		S.SHOP:
 			Sfx.play_music("menu")
@@ -84,7 +103,10 @@ func _on_state(_old: int, s: int) -> void:
 			Sfx.play_music("run")
 		S.RUN_RESULT:
 			Sfx.stop_music()
-	if s != S.IN_RUN and s != S.WAVE_TRANSITION:
+		S.PAUSE:
+			pause.set_quit_text("Run abbrechen" if Game.state_before_pause != S.HUB else "Zum Hauptmenü")
+	var playing := s == S.IN_RUN or s == S.WAVE_TRANSITION
+	if not playing:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _free_world() -> void:
@@ -95,10 +117,41 @@ func _free_world() -> void:
 		stage.queue_free()
 		stage = null
 
+## Schulhof betreten (Hub): begehbare Arena mit Stationen
+func _enter_hub() -> void:
+	HitStop.reset()
+	_free_world()
+	Game.modal_open = false
+	get_tree().paused = false
+	Game.reset_run()
+	Game.player = null
+	Game.chapter = 0
+	Game.difficulty = 0
+	stage = Stage3D.new()
+	world.add_child(stage)
+	arena = Arena.new()
+	arena.stage = stage
+	arena.hub_mode = true
+	stage.ground.add_child(arena)
+	Game.boss_changed.emit(0.0, 1.0, false)
+	Game.change_state(Game.State.HUB)
+
+func _start_from_director() -> void:
+	Game.chapter = int(Save.data.chapter_selected)
+	Game.difficulty = int(Save.data.difficulty)
+	_start_run()
+
 func _start_run() -> void:
+	if Game.chapter < 1:
+		Game.chapter = 1
+	var keep_chapter := Game.chapter
+	var keep_diff := Game.difficulty
 	_free_world()
 	HitStop.reset()
+	Game.modal_open = false
 	Game.reset_run()
+	Game.chapter = keep_chapter
+	Game.difficulty = keep_diff
 	Game.player = null
 	stage = Stage3D.new()
 	world.add_child(stage)
@@ -106,15 +159,48 @@ func _start_run() -> void:
 	arena.stage = stage
 	stage.ground.add_child(arena)
 	hud.reset()
-	Game.money_changed.emit(0)
+	Game.money_changed.emit(Game.money)
 	Game.xp_changed.emit(0, Game.xp_needed(), 1)
 	arena.start_next_wave()
 
-func _to_menu() -> void:
-	HitStop.reset()
-	_free_world()
-	Game.boss_changed.emit(0.0, 1.0, false)
-	Game.change_state(Game.State.MAIN_MENU)
+func _on_pause_quit() -> void:
+	if Game.state_before_pause == Game.State.HUB:
+		HitStop.reset()
+		_free_world()
+		Game.change_state(Game.State.MAIN_MENU)
+	else:
+		# Run abbrechen: Zeugnis mit bisherigen Belohnungen
+		Game.state_before_pause = Game.State.IN_RUN
+		Game.end_run(false)
+
+func _on_station(kind: String) -> void:
+	if Game.modal_open:
+		return
+	match kind:
+		"skills": skills.open()
+		"workbench": workbench.open()
+		"board": board.open()
+		"ag": ags.open()
+		"director": director.open()
+		"photo":
+			Game.modal_open = true
+			get_tree().paused = true
+			charsel.visible = true
+
+func _close_charsel() -> void:
+	if Game.state == Game.State.HUB:
+		charsel.visible = false
+		Game.modal_open = false
+		get_tree().paused = false
+	else:
+		Game.change_state(Game.State.MAIN_MENU)
+
+func _on_char_confirmed(_id: String) -> void:
+	if Game.state == Game.State.HUB:
+		_close_charsel()
+		Juice.float_text_at(Game.player.global_position, 90.0, "ANWESEND!", Color(0.5, 1.0, 0.6), 24, true)
+	else:
+		_start_run()
 
 func _on_upgrade_chosen(id: String) -> void:
 	if Game.state != Game.State.LEVEL_UP:

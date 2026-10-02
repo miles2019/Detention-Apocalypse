@@ -10,10 +10,13 @@ var hp_mult := 1.0
 var _timer := 0.0
 var _interval := 1.0
 var _pending := 0
+var _elapsed := 0.0
+var _limit := 60.0
 const MAX_ALIVE := 34
 
 func start_wave(n: int) -> void:
-	var def: Dictionary = Db.waves[n - 1]
+	var chap: Dictionary = Game.chapter_data()
+	var def: Dictionary = chap.waves[n - 1]
 	queue.clear()
 	var late: Array = []
 	for id in def.groups:
@@ -26,9 +29,11 @@ func start_wave(n: int) -> void:
 	# Elite-Gegner erscheinen in der zweiten Wellenhälfte
 	for id in late:
 		queue.insert(int(queue.size() * randf_range(0.45, 0.8)), id)
-	hp_mult = 1.0 + 0.1 * float(n - 1)
+	hp_mult = (1.0 + 0.1 * float(n - 1)) * chap.hp_scale * (1.0 + 0.25 * float(Game.difficulty))
 	_interval = def.duration / float(maxi(1, queue.size()))
 	_timer = 0.8
+	_elapsed = 0.0
+	_limit = def.duration * 1.5
 	active = true
 	_pending = 0
 	_emit_progress()
@@ -37,6 +42,13 @@ func _process(delta: float) -> void:
 	if not active or Game.state != Game.State.IN_RUN:
 		return
 	_timer -= delta
+	_elapsed += delta
+	if _elapsed > _limit and queue.is_empty():
+		# Wellen-Zeitlimit: übrige Fernkämpfer rücken vor (kein endloses Verstecken)
+		for e in Game.enemies:
+			if is_instance_valid(e) and not e.hunt:
+				e.hunt = true
+				e.speed_boost = maxf(e.speed_boost, 1.35)
 	var alive := Game.enemies.size() + _pending
 	if not queue.is_empty():
 		if alive < 5:

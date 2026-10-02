@@ -35,6 +35,10 @@ var _alt_tex: Texture2D
 var _base_tex: Texture2D
 var _strafe := 1.0
 var _hit_flash_cd := 0.0
+var glue_t := 0.0
+var speed_boost := 1.0
+var hunt := false
+var glue_burst := 0.0
 
 static var BossScript: GDScript
 
@@ -87,7 +91,7 @@ func p(key: String, default = 0.0):
 	return data.params.get(key, default)
 
 func spd() -> float:
-	return data.speed * slow_mult * Game.phase_mod("speed") * (1.2 if is_mini else 1.0)
+	return data.speed * slow_mult * speed_boost * Game.phase_mod("speed") * (1.2 if is_mini else 1.0)
 
 func is_attacking() -> bool:
 	return atk == "windup" or atk == "act"
@@ -95,6 +99,29 @@ func is_attacking() -> bool:
 func apply_slow(mult: float, t: float) -> void:
 	slow_mult = minf(slow_mult, mult)
 	slow_t = maxf(slow_t, t)
+
+## Kaugummi: Gegner klebt fest und platzt nach kurzer Zeit (Flächenschaden)
+func apply_glue(t: float, burst: float) -> void:
+	if dead:
+		return
+	glue_t = maxf(glue_t, t)
+	glue_burst = maxf(glue_burst, burst)
+	rig.set_tint(Color(1.0, 0.55, 0.85))
+
+func _glue_pop() -> void:
+	var pos := global_position
+	var b := glue_burst
+	glue_t = 0.0
+	glue_burst = 0.0
+	rig.set_tint(Color.WHITE)
+	Juice.ring(pos, 70.0, Color(1.0, 0.5, 0.8), 0.3, 6.0, true)
+	Juice.burst(pos + Vector2(0, -20), Color(1.0, 0.5, 0.8), 14, 220.0, 0.5, 4.0, 360.0, Vector2.UP, 0.0, "circle")
+	Sfx.play("splat", 1.3)
+	Game.arena.stage.pulse_light(pos, Color(1.0, 0.5, 0.8), 1.2, 2.0, 0.2)
+	for e in Game.enemies.duplicate():
+		if is_instance_valid(e) and not e.dead and e != self and e.global_position.distance_to(pos) < 70.0 + e.data.radius:
+			e.take_hit(b * 0.6, (e.global_position - pos).normalized(), 160.0, false, {tags = "pop"})
+	take_hit(b, Vector2.UP, 0.0, false, {tags = "pop", quiet = true})
 
 func stun(t: float) -> void:
 	if dead:
@@ -117,6 +144,11 @@ func _physics_process(delta: float) -> void:
 	slow_t = maxf(0.0, slow_t - delta)
 	if slow_t <= 0.0:
 		slow_mult = 1.0
+	if glue_t > 0.0:
+		glue_t -= delta
+		slow_mult = minf(slow_mult, 0.2)
+		if glue_t <= 0.0:
+			_glue_pop()
 	atk_cd -= delta
 	contact_cd -= delta
 	_bar_t = maxf(0.0, _bar_t - delta)
@@ -143,7 +175,7 @@ func _physics_process(delta: float) -> void:
 	if target_ok and contact_cd <= 0.0 and stun_t <= 0.0 and atk != "windup":
 		var d2 = pl.global_position.distance_to(global_position)
 		if d2 < data.radius + 13.0:
-			var mult := 1.5 if atk == "act" else 1.0
+			var mult := (1.5 if atk == "act" else 1.0) * (1.0 + 0.1 * float(Game.difficulty))
 			if pl.take_damage(data.contact_damage * mult, global_position):
 				contact_cd = 0.8
 				rig.squash(1.2, 0.85)
@@ -298,7 +330,7 @@ func _think_charge(delta: float, to_target: Vector2, dist: float, target_ok: boo
 	return Vector2.ZERO
 
 func _think_ranged(delta: float, to_target: Vector2, dist: float, target_ok: bool) -> Vector2:
-	var pref: float = p("pref", 280.0)
+	var pref: float = 70.0 if hunt else p("pref", 280.0)
 	match atk:
 		"idle":
 			var v := Vector2.ZERO
@@ -437,8 +469,9 @@ func take_hit(dmg: float, dir: Vector2, kb: float, crit: bool, opts: Dictionary 
 		Juice.zoom_pop(0.02)
 		rig.flash(0.14, Color(1, 0.9, 0.4))
 	else:
-		_dmg_accum += dmg
-		if _dmg_text_t <= 0.0:
+		if dmg > 0.0:
+			_dmg_accum += dmg
+		if _dmg_text_t <= 0.0 and _dmg_accum > 0.0:
 			Juice.float_text_at(global_position, data.height - 6, str(int(round(_dmg_accum))), Color(1, 1, 1), 15)
 			_dmg_accum = 0.0
 			_dmg_text_t = 0.28
@@ -461,6 +494,8 @@ func die(dir: Vector2, crit: bool, tags: String = "") -> void:
 	dead = true
 	Game.enemies.erase(self)
 	Game.register_kill()
+	if data.elite:
+		Game.stats.elites += 1
 	var pos := global_position
 	var mc := _mat_color()
 	Sfx.play("death", randf_range(0.9, 1.3), -6.0)

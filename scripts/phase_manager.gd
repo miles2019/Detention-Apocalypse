@@ -2,7 +2,7 @@ class_name PhaseManager
 extends Node
 ## Unterrichtsphasen: Glocke, Fachwechsel, Farbwechsel, Regeländerung (über Game.phase_mods).
 
-const ORDER := ["Physik", "Sport", "Chemie"]
+var ORDER: Array = ["Physik", "Sport", "Chemie"]
 const PHASE_LENGTH := 34.0
 
 var current := ""
@@ -12,6 +12,7 @@ var _acid_t := 2.0
 var _tint_tw: Tween
 
 func begin_wave(wave_n: int) -> void:
+	ORDER = Game.chapter_data().phases
 	_idx = (wave_n - 1) % ORDER.size()
 	_activate_phase(ORDER[_idx], 1.0)
 
@@ -33,6 +34,7 @@ func _activate_phase(id: String, delay: float) -> void:
 		Game.arena.announcer.say(ph.announcement, "phase")
 	)
 	Game.set_phase(id)
+	Game.arena.stage.set_phase_fx(id)
 	Juice.shake(0.3)
 	Juice.ring(Game.player.global_position, 260.0, Color.WHITE, 0.5, 8.0)
 	if _tint_tw:

@@ -22,6 +22,10 @@ var _slot_flash := [0.0, 0.0, 0.0, 0.0]
 var _slot_ready := [true, true, true, true]
 var _splashes: Array = []
 var _stamp_n := 0
+var _bar_top: ColorRect
+var _bar_bot: ColorRect
+var _title_box: Control
+var _title_tw: Tween
 var _last_xp := 0
 var _last_money := 0
 
@@ -66,6 +70,23 @@ func _ready() -> void:
 	_flash.color = Color(1, 1, 1, 0)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash)
+	# Kino-Balken und Boss-Titelkarte
+	_bar_top = ColorRect.new()
+	_bar_top.color = Color.BLACK
+	_bar_top.size = Vector2(1280, 0)
+	_bar_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bar_top)
+	_bar_bot = ColorRect.new()
+	_bar_bot.color = Color.BLACK
+	_bar_bot.position = Vector2(0, 720)
+	_bar_bot.size = Vector2(1280, 0)
+	_bar_bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bar_bot)
+	_title_box = Control.new()
+	_title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_title_box)
+	Game.cinematic_bars.connect(_on_bars)
+	Game.boss_title.connect(_on_boss_title)
 	Game.announce.connect(_on_announce)
 	Game.stamp_requested.connect(_on_stamp)
 	Game.chain_event.connect(_on_chain)
@@ -95,6 +116,45 @@ func reset() -> void:
 	_wave_info = {alive = 0, left = 0}
 	for ch in _stamps.get_children():
 		ch.queue_free()
+
+func _on_bars(on: bool) -> void:
+	var h := 84.0 if on else 0.0
+	var tw := create_tween().set_parallel(true).set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).set_ignore_time_scale(true)
+	tw.tween_property(_bar_top, "size:y", h, 0.45).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_bar_bot, "size:y", h, 0.45).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_bar_bot, "position:y", 720.0 - h, 0.45).set_trans(Tween.TRANS_CUBIC)
+
+func _on_boss_title(boss_name: String, title: String, intro: String) -> void:
+	for ch in _title_box.get_children():
+		ch.queue_free()
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UIKit.box(Color(0.1, 0.05, 0.08, 0.92), Color("c0392b"), 5, 10, 16))
+	panel.position = Vector2(220, 470)
+	panel.custom_minimum_size = Vector2(840, 0)
+	var v := VBoxContainer.new()
+	panel.add_child(v)
+	var n := UIKit.label(boss_name, 58, Color("fff1c8"), HORIZONTAL_ALIGNMENT_CENTER, true)
+	v.add_child(n)
+	var t := UIKit.label(title, 26, Color("ff8a70"), HORIZONTAL_ALIGNMENT_CENTER, true)
+	v.add_child(t)
+	var i := UIKit.label(intro, 17, Color(0.9, 0.9, 1.0), HORIZONTAL_ALIGNMENT_CENTER)
+	i.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	i.custom_minimum_size = Vector2(800, 0)
+	i.visible_characters = 0
+	v.add_child(i)
+	_title_box.add_child(panel)
+	panel.modulate.a = 0.0
+	panel.scale = Vector2(1.3, 1.3)
+	panel.pivot_offset = Vector2(420, 60)
+	if _title_tw:
+		_title_tw.kill()
+	_title_tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).set_ignore_time_scale(true)
+	_title_tw.tween_property(panel, "modulate:a", 1.0, 0.15)
+	_title_tw.parallel().tween_property(panel, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_title_tw.tween_property(i, "visible_characters", intro.length(), 1.4)
+	_title_tw.tween_interval(1.2)
+	_title_tw.tween_property(panel, "modulate:a", 0.0, 0.35)
+	_title_tw.tween_callback(panel.queue_free)
 
 func _process(delta: float) -> void:
 	if not visible:
@@ -160,32 +220,23 @@ func _draw_hud() -> void:
 	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012)
 	_tex(Db.i_icon(20), Rect2(24, 22, 38, 38), Color(1, 1, 1, 1.0 if not low else 0.6 + 0.4 * pulse))
 	var hp_r := Rect2(70, 28, 246, 24)
-	c.draw_rect(hp_r.grow(3), Color(0.15, 0.1, 0.1))
-	c.draw_rect(hp_r, Color(0.3, 0.12, 0.12))
-	c.draw_rect(Rect2(hp_r.position, Vector2(hp_r.size.x * clampf(_hp_ghost / pl.max_hp, 0, 1), hp_r.size.y)), Color(1, 0.95, 0.85))
 	var hf := clampf(_hp_shown / pl.max_hp, 0, 1)
-	c.draw_rect(Rect2(hp_r.position, Vector2(hp_r.size.x * hf, hp_r.size.y)), Color(0.88, 0.2, 0.2) if not low else Color(1.0, 0.25 + 0.2 * pulse, 0.2))
-	# abwischbarer Balken: Kratzspuren
-	for i in 10:
-		var x := hp_r.position.x + 10.0 + i * 24.0
-		if x < hp_r.position.x + hp_r.size.x * hf - 10.0:
-			c.draw_line(Vector2(x, hp_r.position.y + 5), Vector2(x + 9, hp_r.position.y + 15), Color(1, 1, 1, 0.22), 2.0)
+	UIKit.draw_bar(c, hp_r, hf, "bar_red", clampf(_hp_ghost / pl.max_hp, 0, 1))
+	if low:
+		c.draw_style_box(UIKit.sbox("bar_cream", 4, Color(1, 1, 1, 0.25 + 0.3 * pulse)), hp_r)
 	_txt(Vector2(70, 47), "%d / %d" % [ceili(pl.hp), int(pl.max_hp)], 16, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, 246.0)
 	# Tinte (XP)
 	_tex(Db.i_icon(15), Rect2(26, 64, 34, 34))
 	var xp_r := Rect2(70, 74, 190, 14)
-	c.draw_rect(xp_r.grow(3), Color(0.1, 0.1, 0.2))
-	c.draw_rect(xp_r, Color(0.13, 0.15, 0.3))
-	c.draw_rect(Rect2(xp_r.position, Vector2(xp_r.size.x * clampf(_xp_shown, 0, 1), xp_r.size.y)), Color(0.25, 0.4, 0.95))
-	c.draw_rect(Rect2(xp_r.position, Vector2(xp_r.size.x * clampf(_xp_shown, 0, 1), 4)), Color(0.55, 0.7, 1.0))
+	UIKit.draw_bar(c, xp_r, clampf(_xp_shown, 0, 1), "bar_blue")
 	_txt(Vector2(268, 88), "Lv %d" % Game.level, 17, Color(0.7, 0.85, 1.0))
 	for s in _splashes:
 		c.draw_circle(s.pos, 2.5, Color(0.3, 0.45, 1.0, clampf(s.life * 3.0, 0, 1)))
 	# Brotdose (Pausengeld)
 	var shake := sin(Time.get_ticks_msec() * 0.06) * 3.0 * _money_shake
 	c.draw_set_transform(Vector2(26, 110) + Vector2(18, 18), shake * 0.03, Vector2.ONE * (1.0 + 0.25 * _money_pop))
-	var sw: Texture2D = Db.tex("res://assets/items/sandwich.png")
-	c.draw_texture_rect(sw, Rect2(-18, -18, 36, 36), false)
+	var sw: Texture2D = UIKit.tex_icon("coins")
+	c.draw_texture_rect(sw, Rect2(-20, -20, 40, 40), false)
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var mf := 24 + int(8 * _money_pop)
 	_txt(Vector2(74, 128), "Pausengeld: %d" % Game.money, mf, Color(1.0, 0.88, 0.3))
@@ -227,19 +278,36 @@ func _draw_hud() -> void:
 		c.draw_rect(Rect2(br.position, Vector2(br.size.x * clampf(_boss.ghost, 0, 1), br.size.y)), Color(1, 0.95, 0.85))
 		c.draw_rect(Rect2(br.position, Vector2(br.size.x * clampf(_boss.hp / _boss.max, 0, 1), br.size.y)), Color(0.9, 0.2, 0.2))
 		c.draw_line(Vector2(br.position.x + br.size.x * 0.5, br.position.y - 4), Vector2(br.position.x + br.size.x * 0.5, br.position.y + 30), Color.WHITE, 2.0)
-		_txt(Vector2(br.position.x, br.position.y - 8), "Frau Eisenhart – Sportlehrerin", 18, Color(1, 0.9, 0.7))
+		var cd: Dictionary = Game.arena.chapter if Game.arena != null else {boss_name = "Boss", boss_title = ""}
+		_txt(Vector2(br.position.x, br.position.y - 8), "%s – %s" % [cd.boss_name, cd.boss_title], 18, Color(1, 0.9, 0.7))
+	# ------- Schulregel / Event
+	var chip_y := 96.0
+	if Game.arena != null and Game.arena.events != null and Game.arena.events.active != "":
+		var ev: Dictionary = Db.events[Game.arena.events.active]
+		var er := Rect2(490, chip_y, 300, 52)
+		c.draw_style_box(UIKit.box(Color(ev.color.r * 0.35, ev.color.g * 0.35, ev.color.b * 0.35, 0.95), ev.color, 4, 10, 4), er)
+		_tex(ev.icon, Rect2(er.position + Vector2(6, 6), Vector2(40, 40)))
+		_txt(er.position + Vector2(54, 24), ev.name, 17, Color.WHITE)
+		var ef := clampf(Game.arena.events.time_left / maxf(0.1, Game.arena.events.duration), 0.0, 1.0)
+		c.draw_rect(Rect2(er.position.x + 54, er.position.y + 32, 232, 8), Color(0, 0, 0, 0.5))
+		c.draw_rect(Rect2(er.position.x + 54, er.position.y + 32, 232 * ef, 8), ev.color)
+		chip_y += 58.0
+	if Game.rule_block != "":
+		var rr := Rect2(490, chip_y, 300, 38)
+		c.draw_style_box(UIKit.box(Color(0.5, 0.08, 0.1, 0.95), Color("ff6a5a"), 4, 10, 4), rr)
+		_txt(rr.position + Vector2(10, 26), "SCHULREGEL: " + ("Kein Nahkampf!" if Game.rule_block == "melee" else "Kein Fernkampf!"), 17, Color.WHITE)
 	# ------- Waffen-Spindfächer
 	var total_w := 4 * SLOT + 3 * 10.0
 	var x0 := (1280.0 - total_w) * 0.5
 	var y0 := 720.0 - SLOT - 16.0
 	for i in 4:
 		var r := Rect2(x0 + i * (SLOT + 10.0), y0, SLOT, SLOT)
-		c.draw_rect(Rect2(r.position + Vector2(3, 5), r.size), Color(0, 0, 0, 0.35))
-		c.draw_rect(r, Color(0.45, 0.52, 0.6))
-		c.draw_rect(r.grow(-4), Color(0.58, 0.66, 0.74))
-		c.draw_rect(r, Color(0.1, 0.12, 0.18), false, 3.0)
-		for v in 3:
-			c.draw_line(r.position + Vector2(18 + v * 18, 6), r.position + Vector2(18 + v * 18, 12), Color(0.2, 0.25, 0.32), 2.0)
+		var sname := "slot_blue"
+		if i < pl.weapons.size():
+			sname = "slot_yellow" if pl.weapons[i].data.evolution else "slot_blue"
+		else:
+			sname = "slot_purple"
+		c.draw_style_box(UIKit.sbox(sname, 4, Color(1, 1, 1, 0.92) if i < pl.weapons.size() else Color(0.6, 0.6, 0.7, 0.8)), r)
 		if i < pl.weapons.size():
 			var w: WeaponRunner = pl.weapons[i]
 			var bob := 0.0
@@ -255,8 +323,7 @@ func _draw_hud() -> void:
 			for l in w.level:
 				c.draw_rect(Rect2(r.position.x + 6 + l * 9, r.position.y + SLOT - 11, 7, 6), Color(1, 0.85, 0.2))
 			if w.data.evolution:
-				c.draw_rect(r.grow(2), Color(1, 0.85, 0.2), false, 3.0)
-				_txt(r.position + Vector2(4, 16), "EVO", 12, Color(1, 0.9, 0.3))
+				_txt(r.position + Vector2(8, 18), "EVO", 12, Color(1, 0.9, 0.3))
 			# Fachsymbol
 			_tex(Db.subject_icon(w.data.subject), Rect2(r.position + Vector2(SLOT - 22, 2), Vector2(20, 20)))
 		else:

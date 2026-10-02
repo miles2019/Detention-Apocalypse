@@ -9,6 +9,17 @@ var boss_only := false
 var evo_test := false
 var ui_test := false
 var locker_test := false
+var hub_test := false
+var start_weapon := ""
+var proj_shots := false
+var _proj_cd := 0.0
+var _hub_i := 0
+var _hub_t := 0.0
+var chapter_arg := 1
+var weapons_test := false
+var event_arg := ""
+var _wp_idx := 0
+var _wp_t := 0.0
 var _lk: Node = null
 var again := false
 var _ui_step := 0
@@ -35,6 +46,18 @@ func _ready() -> void:
 			boss_only = true
 		elif a == "--evo":
 			evo_test = true
+		elif a.begins_with("--chapter="):
+			chapter_arg = int(a.substr(10))
+		elif a == "--weapons":
+			weapons_test = true
+		elif a.begins_with("--event="):
+			event_arg = a.substr(8)
+		elif a.begins_with("--start="):
+			start_weapon = a.substr(8)
+		elif a == "--proj":
+			proj_shots = true
+		elif a == "--hub":
+			hub_test = true
 		elif a == "--locker":
 			locker_test = true
 		elif a == "--ui":
@@ -78,12 +101,24 @@ func _process(delta: float) -> void:
 			if _state_t > 1.2 and not _acted:
 				_acted = true
 				shot("menu")
-				Game.change_state(S.CHARACTER_SELECT)
+				if hub_test:
+					Save.data.passes = 60
+					Save.data.marken = 12
+					main._enter_hub()
+				else:
+					Game.change_state(S.CHARACTER_SELECT)
 		S.CHARACTER_SELECT:
 			if _state_t > 0.8 and not _acted:
 				_acted = true
 				shot("charselect")
+				Game.chapter = chapter_arg
+				if start_weapon != "":
+					Save.data.start_weapon = start_weapon
 				main._start_run()
+				if god:
+					Game.god_mode = true
+				if event_arg != "":
+					Game.arena.events.schedule_now(event_arg)
 				if god:
 					Game.god_mode = true
 				if boss_only:
@@ -96,6 +131,8 @@ func _process(delta: float) -> void:
 					Game.player.equip("water")
 					Game.player.equip("blowpipe")
 					Game.arena.start_boss_intro()
+		S.HUB:
+			_hub(real_delta)
 		S.IN_RUN, S.WAVE_TRANSITION, S.BOSS_INTRO:
 			_play(real_delta)
 		S.LEVEL_UP:
@@ -125,6 +162,38 @@ func _process(delta: float) -> void:
 					main.result.restart_pressed.emit()
 					return
 				get_tree().create_timer(0.5, true, false, true).timeout.connect(func(): get_tree().quit())
+
+func _hub(delta: float) -> void:
+	if not hub_test:
+		return
+	_hub_t += delta
+	var kinds := ["skills", "workbench", "board", "ag", "director"]
+	var modals := [main.skills, main.workbench, main.board, main.ags, main.director]
+	if _hub_i == 0 and _hub_t > 1.8:
+		shot("hub")
+		_hub_i = 1
+		_hub_t = 0.0
+		return
+	if _hub_i >= 1 and _hub_i <= kinds.size():
+		var idx := _hub_i - 1
+		if not Game.modal_open and _hub_t > 0.6:
+			main._on_station(kinds[idx])
+			_hub_t = 0.0
+		elif Game.modal_open and _hub_t > 1.0:
+			shot("hub_" + kinds[idx])
+			if idx == 4:
+				Save.data.chapter_selected = chapter_arg
+				if god:
+					Game.god_mode = true
+				main.director.start_requested.emit()
+				main.director.close()
+				_hub_i = 99
+				if boss_only:
+					pass
+				return
+			modals[idx].close()
+			_hub_i += 1
+			_hub_t = 0.0
 
 func _shop() -> void:
 	if _state_t > 0.9 and not _acted:
@@ -163,6 +232,30 @@ func _play(delta: float) -> void:
 		print("[AUTOTEST] Welle %d, Phase %s" % [Game.wave, Game.phase_id])
 	_shot_t += delta
 	_log_t += delta
+	if proj_shots:
+		_proj_cd -= delta
+		var n := 0
+		for c in Game.arena.fx_layer.get_children():
+			if c is Projectile:
+				n += 1
+		if n >= 2 and _proj_cd <= 0.0:
+			_proj_cd = 2.5
+			shot("proj")
+	if weapons_test:
+		_wp_t += delta
+		if _wp_t > 3.5:
+			_wp_t = 0.0
+			var ids: Array = Db.weapons.keys()
+			if _wp_idx < ids.size():
+				var id: String = ids[_wp_idx]
+				_wp_idx += 1
+				pl.slots = 20
+				pl.weapons.clear()
+				pl.equip(id)
+				print("[AUTOTEST] Waffe ", id)
+				shot("weapon_" + id)
+			else:
+				get_tree().quit()
 	if locker_test:
 		if _lk == null and _total > 6.0:
 			_lk = Game.arena.spawn_enemy("locker", pl.global_position + Vector2(160, 40))
@@ -174,7 +267,7 @@ func _play(delta: float) -> void:
 		_ui_step = 1
 		Game.change_state(Game.State.PAUSE)
 		return
-	if _shot_t > 9.0:
+	if _shot_t > 4.0:
 		_shot_t = 0.0
 		shot("run_w%d_%s" % [Game.wave, Game.phase_id])
 	if _log_t > 10.0:
@@ -182,7 +275,7 @@ func _play(delta: float) -> void:
 		if Game.arena.boss != null and is_instance_valid(Game.arena.boss):
 			var b = Game.arena.boss
 			print("[AUTOTEST] boss hp=%d atk=%s t=%.2f active=%s stun=%.2f spawn=%.2f pat=%s" % [b.hp, b.atk, b.atk_t, b.active, b.stun_t, b.spawn_t, b._pattern])
-		print("[AUTOTEST] rig scale=", pl.rig.scale, " body=", pl.rig.body.scale, " face=", pl._face, " bbscale=", pl.rig.bb.sprite.scale)
+		print("[AUTOTEST] director pending=", Game.arena.director._pending, " queue=", Game.arena.director.queue.size(), " active=", Game.arena.director.active, " enemies=", Game.enemies.size())
 		print("[AUTOTEST] t=%.0f welle=%d hp=%d/%d enemies=%d lvl=%d geld=%d fps=%d dc=%d obj=%d prim=%d" % [Game.stats.time, Game.wave, pl.hp, pl.max_hp, Game.enemies.size(), Game.level, Game.money, Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])
 	if boss_only and Game.arena.boss != null and is_instance_valid(Game.arena.boss) and not Game.arena.boss.dead:
 		var bb = Game.arena.boss

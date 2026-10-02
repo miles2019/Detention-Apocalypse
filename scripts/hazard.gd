@@ -121,6 +121,8 @@ func _apply_zone(delta: float) -> void:
 			Juice.burst(global_position, Color(0.6, 1, 0.8), 8, 120.0, 0.4, 3.0)
 			duration = _t - telegraph
 			return
+		if kind == "heal" and d < radius and do_tick:
+			pl.heal(2.0)
 		if d < radius:
 			if slow_player < 1.0:
 				pl.apply_slow(slow_player, 0.3)

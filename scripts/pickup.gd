@@ -53,7 +53,7 @@ func _make_sprite(path: String, h: float) -> void:
 	_bb = Billboard3D.new()
 	stage.sprites.add_child(_bb)
 	var t: Texture2D = Db.tex(path) if path != "" else Juice.circle_tex()
-	_bb.setup(t, h)
+	_bb.setup(t, h, false)
 	_bb.sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if kind == "xp":
 		_bb.set_tint(Color(0.45, 1.0, 0.85))

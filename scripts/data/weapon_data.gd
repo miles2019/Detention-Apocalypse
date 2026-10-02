@@ -25,3 +25,4 @@ extends Resource
 @export var fire_sfx := "shoot_water"
 @export var max_level := 3
 @export var evolution := false
+@export var params := {}

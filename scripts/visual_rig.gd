@@ -15,6 +15,7 @@ var base_height := 50.0
 var _tw: Tween
 var _flash_tw: Tween
 var _aura_t := 0.0
+var size_mul := 1.0
 var _flash_val := 0.0
 var _flash_col := Color.WHITE
 
@@ -48,7 +49,7 @@ func _draw_shadow() -> void:
 	for i in 20:
 		var a := TAU * i / 20.0
 		pts.append(Vector2(cos(a) * shadow_w * 0.5, sin(a) * shadow_w * 0.2 + 2.0) * k)
-	shadow.draw_colored_polygon(pts, Color(0, 0, 0, 0.3))
+	shadow.draw_colored_polygon(pts, Color(0, 0, 0, 0.13))
 	if aura_color.a > 0.0:
 		var pulse := 0.5 + 0.5 * sin(_aura_t * 5.0)
 		var c := aura_color
@@ -73,7 +74,7 @@ func _process(delta: float) -> void:
 		var flip := scale.x
 		bb.visible = is_visible_in_tree()
 		bb.place(global_position, hop)
-		bb.set_body(Vector2(body.scale.x * flip, body.scale.y), body.rotation * flip)
+		bb.set_body(Vector2(body.scale.x * flip, body.scale.y) * size_mul, body.rotation * flip)
 		var a := modulate.a
 		bb.set_tint(Color(sprite.modulate.r, sprite.modulate.g, sprite.modulate.b, a))
 		bb.set_flash(_flash_val, _flash_col)

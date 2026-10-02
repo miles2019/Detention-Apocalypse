@@ -26,7 +26,8 @@ func on_wave_start(n: int) -> void:
 		say(line("wave"), "wave")
 
 func on_boss_intro() -> void:
-	say(line("boss"), "boss")
+	var key := "boss_%d" % Game.chapter
+	say(line(key if Db.lines.has(key) else "boss"), "boss")
 
 func _on_chain(count: int) -> void:
 	if count >= 5 and Game.stats.time - _last_chaos > 40.0 and Game.state == Game.State.IN_RUN:
