@@ -72,9 +72,9 @@ func _ready() -> void:
 	entities.add_child(player)
 	camera = stage.camera
 	if hub_mode:
-		camera.base_zoom = 0.74
-		camera.clamp_min = Vector2(700, 440)
-		camera.clamp_max = Vector2(900, 640)
+		camera.base_zoom = 0.95
+		camera.clamp_min = Vector2(760, 470)
+		camera.clamp_max = Vector2(840, 600)
 	camera.target = player
 	camera.snap()
 	director = WaveDirector.new()

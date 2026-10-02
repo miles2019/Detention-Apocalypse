@@ -21,6 +21,7 @@ func _process(delta: float) -> void:
 
 func _txt(pos: Vector2, text: String, size: int, color: Color = Color.WHITE) -> void:
 	var f := ThemeDB.fallback_font
+	size = int(size * 0.84)
 	_c.draw_string_outline(f, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, maxi(3, size / 5), Color(0.05, 0.05, 0.1))
 	_c.draw_string(f, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 

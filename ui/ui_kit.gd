@@ -11,6 +11,7 @@ const RED := Color("c0392b")
 const NAVY := Color("22305c")
 const GOLD := Color("f2c230")
 const GREEN := Color("2e9e4f")
+const FS := 0.84   # Kaph ist breiter als die Standardschrift
 const SCALED := "res://assets/ui/scaled/%s.png"
 const ICON := "res://assets/ui/Icons/%s.png"
 
@@ -89,7 +90,7 @@ static func box(bg: Color = PAPER, _border: Color = Color("5a4630"), _border_w: 
 static func label(text: String, size: int = 18, color: Color = INK, align: int = HORIZONTAL_ALIGNMENT_LEFT, outline: bool = false) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", int(size * FS))
 	l.add_theme_color_override("font_color", color)
 	l.horizontal_alignment = align as HorizontalAlignment
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -113,7 +114,7 @@ static func button(text: String, min_size: Vector2 = Vector2(320, 58), font_size
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = min_size
-	b.add_theme_font_size_override("font_size", font_size)
+	b.add_theme_font_size_override("font_size", int(font_size * FS))
 	var v := variant_for(accent)
 	var dark := v in ["red", "blue", "purple", "black", "green"]
 	var fc := Color.WHITE if dark else INK
@@ -228,6 +229,8 @@ static func full(c: Control) -> void:
 ## Zentrales Theme (Buttons, Panels, Label-Farben, Slider). Wird in Main als Root-Theme gesetzt.
 static func make_theme() -> Theme:
 	var t := Theme.new()
+	t.default_font = load("res://assets/fonts/Kaph-Regular.ttf")
+	t.default_font_size = 17
 	t.set_stylebox("normal", "Button", sbox("btn_cream", 8))
 	t.set_stylebox("hover", "Button", sbox_new("btn_yellow", 8))
 	t.set_stylebox("pressed", "Button", sbox_new("btn_cream", 8, Color(0.82, 0.82, 0.82)))
@@ -237,11 +240,11 @@ static func make_theme() -> Theme:
 	t.set_color("font_hover_color", "Button", INK)
 	t.set_color("font_pressed_color", "Button", INK)
 	t.set_color("font_disabled_color", "Button", Color(0.7, 0.7, 0.72))
-	t.set_font_size("font_size", "Button", 22)
+	t.set_font_size("font_size", "Button", 18)
 	t.set_stylebox("panel", "PanelContainer", sbox("container_cream", 14))
 	t.set_stylebox("panel", "Panel", sbox("container_cream", 14))
 	t.set_color("font_color", "Label", INK)
-	t.set_font_size("font_size", "Label", 18)
+	t.set_font_size("font_size", "Label", 15)
 	t.set_stylebox("slider", "HSlider", sbox("bar_back", 4))
 	t.set_stylebox("grabber_area", "HSlider", sbox("bar_green", 4))
 	t.set_stylebox("grabber_area_highlight", "HSlider", sbox("bar_green", 4))

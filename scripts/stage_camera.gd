@@ -3,14 +3,14 @@ extends Camera3D
 ## Schräg von oben blickende Folgekamera (feste Neigung), mit Shake/Zoom-Pop aus dem Juice-Service.
 ## API-kompatibel zur früheren 2D-Kamera: target, focus, base_zoom, snap().
 
-const BASE_DIST := 8.8
+const BASE_DIST := 12.0
 
 var target: Node2D
 var focus = null
 var base_zoom := 1.0
 var roll := 0.0
-var clamp_min := Vector2(520.0, 330.0)
-var clamp_max := Vector2(1080.0, 700.0)
+var clamp_min := Vector2(640.0, 400.0)
+var clamp_max := Vector2(960.0, 640.0)
 var _pos := Vector2(800, 600)
 var _lead := Vector2.ZERO
 

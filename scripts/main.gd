@@ -26,6 +26,8 @@ var _pending_recipe := {}
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().root.content_scale_factor = Game.settings.get("ui_scale", 1.0)
+	var kaph: Font = load("res://assets/fonts/Kaph-Regular.ttf")
+	ThemeDB.fallback_font = kaph
 	get_tree().root.theme = UIKit.make_theme()
 	world = Node.new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE

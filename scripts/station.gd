@@ -35,7 +35,7 @@ func _ready() -> void:
 		"photo": _build_lockers(stage)
 	_label = Label3D.new()
 	_label.text = title
-	_label.font_size = 56
+	_label.font_size = 46
 	_label.pixel_size = 0.0036
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.no_depth_test = true
@@ -150,5 +150,5 @@ func draw_overlay(c: Control, sp: Vector2) -> void:
 	if _near:
 		var pr := Rect2(sp.x - 150, sp.y + 14, 300, 54)
 		c.draw_style_box(UIKit.box(Color(0.1, 0.1, 0.16, 0.92), accent, 3, 10, 4), pr)
-		c.draw_string(f, pr.position + Vector2(14, 24), "[E]  " + title, HORIZONTAL_ALIGNMENT_LEFT, 280, 18, Color.WHITE)
-		c.draw_string(f, pr.position + Vector2(14, 44), hint, HORIZONTAL_ALIGNMENT_LEFT, 280, 13, Color(0.8, 0.85, 0.95))
+		c.draw_string(f, pr.position + Vector2(14, 24), "[E]  " + title, HORIZONTAL_ALIGNMENT_LEFT, 280, 16, Color.WHITE)
+		c.draw_string(f, pr.position + Vector2(14, 44), hint, HORIZONTAL_ALIGNMENT_LEFT, 280, 11, Color(0.8, 0.85, 0.95))
