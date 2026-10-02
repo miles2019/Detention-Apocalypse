@@ -7,7 +7,7 @@ var value := 1
 var _vel := Vector2.ZERO
 var _age := 0.0
 var _speed := 0.0
-var _bb: Billboard3D
+var _bb
 var _pop := 0.0
 var _lift := 0.0
 var _collected := false
@@ -50,14 +50,15 @@ func _ready() -> void:
 
 func _make_sprite(path: String, h: float) -> void:
 	var stage: Stage3D = Game.arena.stage
-	_bb = Billboard3D.new()
-	stage.sprites.add_child(_bb)
 	var t: Texture2D = Db.tex(path) if path != "" else Juice.circle_tex()
-	_bb.setup(t, h, false)
-	_bb.sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_bb = stage.batch.add(t, h, false) if kind != "rare" else null
+	if _bb == null:
+		_bb = Billboard3D.new()
+		stage.sprites.add_child(_bb)
+		_bb.setup(t, h, false)
+		_bb.sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if kind == "xp":
 		_bb.set_tint(Color(0.45, 1.0, 0.85))
-		_bb.mat.set_shader_parameter("tint", Color(0.45, 1.0, 0.85))
 
 func _add_light_column() -> void:
 	var mi := MeshInstance3D.new()

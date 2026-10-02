@@ -38,6 +38,7 @@ var _hit_flash_cd := 0.0
 var glue_t := 0.0
 var speed_boost := 1.0
 var hunt := false
+var _drew := false
 var glue_burst := 0.0
 
 static var BossScript: GDScript
@@ -73,7 +74,7 @@ func _ready() -> void:
 	_tex_path = data.textures[randi() % data.textures.size()]
 	_base_tex = Db.tex(_tex_path)
 	var h := data.height * (0.62 if is_mini else 1.0)
-	rig.setup(_base_tex, h, data.radius * 2.6)
+	rig.setup(_base_tex, h, data.radius * 2.6, true)
 	if data.tex_alt != "":
 		_alt_tex = Db.tex(data.tex_alt)
 	if data.elite:
@@ -179,7 +180,10 @@ func _physics_process(delta: float) -> void:
 			if pl.take_damage(data.contact_damage * mult, global_position):
 				contact_cd = 0.8
 				rig.squash(1.2, 0.85)
-	queue_redraw()
+	var need := atk == "windup"
+	if need or _drew:
+		_drew = need
+		queue_redraw()
 
 func _after_move(_delta: float) -> void:
 	if data.params.get("rattle", false) and randf() < 0.01:
@@ -188,12 +192,15 @@ func _after_move(_delta: float) -> void:
 
 func _separation() -> Vector2:
 	var push := Vector2.ZERO
-	for o in Game.enemies:
-		if o == self or not is_instance_valid(o) or o.dead:
+	var arena = Game.arena
+	if arena == null:
+		return push
+	for o in arena.enemies_near(global_position, 56.0):
+		if o == self:
 			continue
-		var d = global_position - o.global_position
+		var d: Vector2 = global_position - o.global_position
 		var min_d: float = (data.radius + o.data.radius) * 0.9
-		var l = d.length_squared()
+		var l := d.length_squared()
 		if l < min_d * min_d and l > 0.01:
 			push += d.normalized() * (1.0 - sqrt(l) / min_d)
 	return push
@@ -499,6 +506,7 @@ func die(dir: Vector2, crit: bool, tags: String = "") -> void:
 	var pos := global_position
 	var mc := _mat_color()
 	Sfx.play("death", randf_range(0.9, 1.3), -6.0)
+	Juice.burst(pos, Color(0.85, 0.85, 0.88, 1.0), 5, 90.0, 0.7, 4.0, 360.0, Vector2.UP, 0.0, "circle", 20.0)
 	var sc := mc
 	sc.a = 0.5
 	Game.arena.splat(pos, sc, 16.0 if not data.elite else 30.0)
@@ -565,6 +573,9 @@ func _draw() -> void:
 	if atk == "windup":
 		_draw_telegraph()
 
+func wants_overlay() -> bool:
+	return not dead and spawn_t <= 0.0 and (data.elite or _bar_t > 0.0 or atk == "windup" or stun_t > 0.0)
+
 ## Bildschirmebene: Gesundheitsbalken und Warndreieck über dem Kopf
 func draw_overlay(c: Control, sp: Vector2) -> void:
 	if dead or spawn_t > 0.0:
@@ -576,6 +587,20 @@ func draw_overlay(c: Control, sp: Vector2) -> void:
 		c.draw_rect(Rect2(sp.x - w * 0.5 - 1, y - 1, w + 2, 8), Color(0, 0, 0, 0.8))
 		var frac := clampf(hp / max_hp, 0.0, 1.0)
 		c.draw_rect(Rect2(sp.x - w * 0.5, y, w * frac, 6), Color(1.0, 0.3, 0.25) if data.elite else Color(0.9, 0.2, 0.2))
+	if stun_t > 0.0:
+		var t := Time.get_ticks_msec() * 0.006
+		for i in 3:
+			var a := t + TAU * i / 3.0
+			var sp2 := Vector2(sp.x + cos(a) * 16.0, sp.y - h - 4.0 + sin(a) * 5.0)
+			if i == 1:
+				c.draw_string(ThemeDB.fallback_font, sp2 + Vector2(-5, 6), "F", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.3, 0.3))
+			else:
+				var st := PackedVector2Array()
+				for j in 10:
+					var r := 6.0 if j % 2 == 0 else 2.6
+					var aa := TAU * j / 10.0 - PI / 2.0
+					st.append(sp2 + Vector2(cos(aa), sin(aa)) * r)
+				c.draw_colored_polygon(st, Color(1, 0.9, 0.2))
 	if atk == "windup":
 		var top := sp.y - h - 26.0
 		var tri := PackedVector2Array([Vector2(sp.x, top - 15), Vector2(sp.x - 12, top + 7), Vector2(sp.x + 12, top + 7)])

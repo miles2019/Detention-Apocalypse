@@ -2,7 +2,7 @@ shader_type canvas_item;
 // Tilt-Shift (Diorama-Look): oberer/unterer Bildrand leicht unscharf, dezente Vignette. Günstig: 1 oder 5 Samples.
 uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linear;
 uniform float max_blur = 1.6;
-uniform float vignette = 0.32;
+uniform float vignette = 0.42;
 uniform vec4 post_tint : source_color = vec4(1.0);
 uniform float blackout = 0.0;
 uniform vec2 center = vec2(0.5, 0.5);

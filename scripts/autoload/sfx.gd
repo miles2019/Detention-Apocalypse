@@ -11,6 +11,8 @@ var _idx := 0
 var _music: AudioStreamPlayer
 var _music_tracks := {}
 var _current_track := ""
+var _music_thread: Thread
+var _want_track := ""
 var _rng := RandomNumberGenerator.new()
 var _hit_step := 0
 var _hit_last_ms := 0
@@ -35,6 +37,8 @@ func _ready() -> void:
 	add_child(_music)
 	_build_sounds()
 	apply_volumes()
+	_music_thread = Thread.new()
+	_music_thread.start(_gen_music_all)
 
 func apply_volumes() -> void:
 	var s: Dictionary = Game.settings
@@ -72,12 +76,31 @@ func play_music(track: String) -> void:
 		return
 	_current_track = track
 	if not _music_tracks.has(track):
+		if _music_thread != null:
+			_want_track = track     # Musik wird im Hintergrund erzeugt, startet danach automatisch
+			return
 		_music_tracks[track] = _make_music(track)
 	_music.stream = _music_tracks[track]
 	_music.play()
 
+func _gen_music_all() -> void:
+	var out := {}
+	for t in ["menu", "run"]:
+		out[t] = _make_music(t)
+	_music_done.call_deferred(out)
+
+func _music_done(out: Dictionary) -> void:
+	_music_tracks.merge(out)
+	_music_thread.wait_to_finish()
+	_music_thread = null
+	if _want_track != "" and _want_track == _current_track:
+		_music.stream = _music_tracks[_want_track]
+		_music.play()
+	_want_track = ""
+
 func stop_music() -> void:
 	_current_track = ""
+	_want_track = ""
 	_music.stop()
 
 # ---------------------------------------------------------------- Synthese

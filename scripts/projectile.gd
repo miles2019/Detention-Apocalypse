@@ -129,6 +129,8 @@ func _physics_process(delta: float) -> void:
 			vel = vel.lerp(want.normalized() * steer_speed, 1.0 - exp(-3.2 * delta))
 	global_position += vel * delta
 	_trail_t -= delta
+	if kind == "flame" and randf() < 0.25:
+		Game.arena.stage.emit_trail(global_position, 26.0, Color(0.35, 0.3, 0.28, 0.7), false)
 	if _trail_t <= 0.0 and kind != "flame":
 		_trail_t = 0.03 if kind != "ball" else 0.045
 		var tc := color.lightened(0.25)
@@ -169,7 +171,7 @@ func _physics_process(delta: float) -> void:
 	_update3d(delta)
 
 func _check_enemies() -> void:
-	for e in Game.enemies:
+	for e in Game.arena.enemies_near(global_position, radius + 100.0):
 		if not is_instance_valid(e) or e.dead:
 			continue
 		var id = e.get_instance_id()

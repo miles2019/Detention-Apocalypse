@@ -72,7 +72,12 @@ func place(p2: Vector2, lift_px: float = 0.0) -> void:
 		shadow_pivot.position.y = -lift_px * Stage3D.S + 0.006
 		_shadow_mat.set_shader_parameter("opacity", 0.62 * (1.0 - clampf(lift_px / 90.0, 0.0, 0.65)))
 
+var _last_body := Vector3(-99, 0, 0)
 func set_body(scale2: Vector2, rot: float) -> void:
+	var nb := Vector3(scale2.x, scale2.y, rot)
+	if nb.is_equal_approx(_last_body):
+		return
+	_last_body = nb
 	sprite.scale = Vector3(scale2.x, scale2.y, 1.0)
 	sprite.rotation.z = rot
 	if shadow != null:
@@ -82,7 +87,11 @@ func set_flash(v: float, color: Color = Color.WHITE) -> void:
 	mat.set_shader_parameter("flash", v)
 	mat.set_shader_parameter("flash_color", color)
 
+var _last_tint := Color(-1, 0, 0, 0)
 func set_tint(c: Color) -> void:
+	if c == _last_tint:
+		return
+	_last_tint = c
 	mat.set_shader_parameter("tint", c)
 	if _shadow_mat != null:
 		_shadow_mat.set_shader_parameter("opacity", 0.62 * c.a * (1.0 - clampf(_lift / 90.0, 0.0, 0.65)))

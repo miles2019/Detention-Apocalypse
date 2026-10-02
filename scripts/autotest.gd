@@ -12,6 +12,10 @@ var locker_test := false
 var hub_test := false
 var start_weapon := ""
 var proj_shots := false
+var stress := false
+var _stress_t := 0.0
+var _ft := []
+var _ft_t := 0.0
 var _proj_cd := 0.0
 var _hub_i := 0
 var _hub_t := 0.0
@@ -54,6 +58,8 @@ func _ready() -> void:
 			event_arg = a.substr(8)
 		elif a.begins_with("--start="):
 			start_weapon = a.substr(8)
+		elif a == "--stress":
+			stress = true
 		elif a == "--proj":
 			proj_shots = true
 		elif a == "--hub":
@@ -82,6 +88,18 @@ func shot(tag: String) -> void:
 	print("[AUTOTEST] screenshot %s" % tag)
 
 func _process(delta: float) -> void:
+	if stress:
+		_ft.append(delta / maxf(0.01, Engine.time_scale))
+		_ft_t += delta / maxf(0.01, Engine.time_scale)
+		if _ft_t > 8.0:
+			_ft.sort()
+			var avg := 0.0
+			for x in _ft:
+				avg += x
+			avg /= _ft.size()
+			print("[PERF] frames=%d avg=%.1fms p95=%.1fms p99=%.1fms max=%.1fms enemies=%d proc=%.1f phys=%.1f dc=%d obj=%d nodes=%d" % [_ft.size(), avg * 1000.0, _ft[int(_ft.size() * 0.95)] * 1000.0, _ft[int(_ft.size() * 0.99)] * 1000.0, _ft[-1] * 1000.0, Game.enemies.size(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
+			_ft.clear()
+			_ft_t = 0.0
 	var real_delta := delta / maxf(0.01, Engine.time_scale)
 	_total += real_delta
 	if _total > _max_time:
@@ -241,6 +259,12 @@ func _play(delta: float) -> void:
 		if n >= 2 and _proj_cd <= 0.0:
 			_proj_cd = 2.5
 			shot("proj")
+	if stress and Game.arena != null:
+		_stress_t -= delta
+		if _stress_t <= 0.0 and Game.enemies.size() < 70:
+			_stress_t = 0.12
+			var ids := ["bird", "frog", "rat", "nerd", "sheep", "football", "zombie"]
+			Game.arena.spawn_enemy(ids[randi() % ids.size()], Game.arena.random_spawn_pos(), 3.0)
 	if weapons_test:
 		_wp_t += delta
 		if _wp_t > 3.5:

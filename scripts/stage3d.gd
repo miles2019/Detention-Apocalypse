@@ -13,6 +13,7 @@ const PLAY := Rect2(70, 125, 1460, 825)
 
 var ground: SubViewport
 var sprites: Node3D
+var batch: SpriteBatch
 var props: Node3D
 var fx3: Node3D
 var camera: StageCamera
@@ -48,6 +49,8 @@ func _ready() -> void:
 	call_deferred("_apply_canvas_scale")
 	sprites = Node3D.new()
 	add_child(sprites)
+	batch = SpriteBatch.new()
+	add_child(batch)
 	props = Node3D.new()
 	add_child(props)
 	fx3 = Node3D.new()
@@ -88,11 +91,11 @@ func _apply_canvas_scale() -> void:
 
 ## Persistente Emitter für Projektil-Schweife und Mündungs-/Trefferblitze (emit_particle: sehr günstig)
 func _build_emitters() -> void:
-	_trail_s = _emitter(0.42, 0.9, 600, true)
-	_trail_b = _emitter(0.55, 1.7, 200, true)
+	_trail_s = _emitter(0.5, 1.0, 600, true, true)
+	_trail_b = _emitter(0.7, 1.9, 200, true, true)
 	_flash_fx = _emitter(0.16, 3.4, 80, false)
 
-func _emitter(life: float, size: float, amount: int, fade_scale: bool) -> GPUParticles3D:
+func _emitter(life: float, size: float, amount: int, fade_scale: bool, smoke: bool = false) -> GPUParticles3D:
 	var p := GPUParticles3D.new()
 	p.emitting = false
 	p.amount = amount
@@ -130,7 +133,7 @@ func _emitter(life: float, size: float, amount: int, fade_scale: bool) -> GPUPar
 	mt.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mt.particles_anim_h_frames = 1
 	mt.particles_anim_v_frames = 1
-	qm.material = mt
+	qm.material = Juice.smoke_material() if smoke else mt
 	p.draw_pass_1 = qm
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(p)
@@ -627,4 +630,6 @@ class StageOverlay extends Control:
 			return
 		for n in get_tree().get_nodes_in_group("overlay"):
 			if is_instance_valid(n) and n.is_inside_tree() and n.has_method("draw_overlay"):
+				if n.has_method("wants_overlay") and not n.wants_overlay():
+					continue
 				n.draw_overlay(self, stage.world_to_screen(n.global_position))

@@ -71,6 +71,16 @@ func _draw() -> void:
 	for i in 70:
 		var q := Vector2(rng.randf_range(Arena.PLAY.position.x, Arena.PLAY.end.x), rng.randf_range(Arena.PLAY.position.y, Arena.PLAY.end.y))
 		draw_line(q, q + Vector2(rng.randf_range(-24, 24), rng.randf_range(-8, 8)), Color(0.25, 0.23, 0.2, 0.3), 2.0)
+	# Düstere Ränder: zu den Raumkanten hin wird der Boden dunkler (je Kapitel unterschiedlich stark)
+	var strength: float = {"classroom": 0.88, "lab": 0.82, "library": 0.95, "yard": 0.32}.get(style, 0.55)
+	var steps := 36
+	for k in steps:
+		var t := float(k) / float(steps)
+		var a := strength * pow(1.0 - t, 1.4)
+		draw_rect(Arena.PLAY.grow(-8.0 * k - 4.0), Color(0.02, 0.02, 0.06, a), false, 8.5)
+	for corner in [Arena.PLAY.position, Vector2(Arena.PLAY.end.x, Arena.PLAY.position.y), Vector2(Arena.PLAY.position.x, Arena.PLAY.end.y), Arena.PLAY.end]:
+		for r in 6:
+			draw_circle(corner, 260.0 - r * 38.0, Color(0.02, 0.02, 0.06, strength * 0.09))
 	draw_rect(Arena.PLAY, Color(0.1, 0.1, 0.14), false, 6.0)
 
 func _blob(center: Vector2, r: float, color: Color, rng: RandomNumberGenerator) -> void:

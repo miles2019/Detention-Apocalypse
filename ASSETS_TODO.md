@@ -41,3 +41,9 @@ Ersetzen: `Sfx.sounds["name"] = load("res://audio/xyz.ogg")`. Audio-Busse: Music
 - Debug-Tasten: F1 +50 Geld, F2 Level-Up, F3 alle Gegner töten, F4 Gottmodus, F5 Evolutions-Waffen geben
 - Bot: `godot --path . -- --autotest --god --speed=3 --shots=<ordner> [--hub] [--chapter=2] [--boss] [--evo] [--ui] [--weapons] [--event=stromausfall] [--start=water] [--proj]`
   (Bot-Läufe nutzen `user://save_autotest.json`, nie den echten Spielstand)
+
+## Performance
+- Gegner-Separation und Projektil-Treffer nutzen ein Raster (`Arena.enemies_near`, CELL=64) statt O(n²).
+- `SpriteBatch` (scripts/sprite_batch.gd): Gegner, Münzen, Heil- und XP-Pickups sowie ihre Schatten werden über je ein MultiMesh gezeichnet (Textur-Atlas, Shader `batch_sprite`/`batch_shadow`). Neue Gegnertexturen werden automatisch in den Atlas aufgenommen (Db.enemies).
+- Musik wird beim Start in einem Hintergrund-Thread erzeugt (kein Hänger beim ersten Track).
+- Bot-Flag `--stress`: füllt die Arena bis 70 Gegner und loggt `[PERF]`-Frame-Statistiken (Max-Werte werden durch Hitstop-Zeitskalierung verfälscht, avg/p95 beachten).

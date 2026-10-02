@@ -8,7 +8,7 @@ var sprite: Sprite2D
 var shadow: Node2D
 var shadow_w := 40.0
 var aura_color := Color(0, 0, 0, 0)
-var bb: Billboard3D
+var bb      # Billboard3D (Spieler, Sonderfälle) oder BatchSprite (Gegner, Drops)
 var stunned := false : set = _set_stunned
 var hop := 0.0 : set = _set_hop
 var base_height := 50.0
@@ -18,8 +18,11 @@ var _aura_t := 0.0
 var size_mul := 1.0
 var _flash_val := 0.0
 var _flash_col := Color.WHITE
+var _last_tint := Color(-1, 0, 0, 0)
+var _last_flash := -1.0
+var _last_vis := true
 
-func setup(tex: Texture2D, height: float, shadow_width: float) -> void:
+func setup(tex: Texture2D, height: float, shadow_width: float, batched: bool = false) -> void:
 	base_height = height
 	shadow_w = shadow_width
 	shadow = Node2D.new()
@@ -33,9 +36,12 @@ func setup(tex: Texture2D, height: float, shadow_width: float) -> void:
 	sprite.texture = tex
 	var stage: Stage3D = Game.arena.stage if Game.arena != null else null
 	if stage != null:
-		bb = Billboard3D.new()
-		stage.sprites.add_child(bb)
-		bb.setup(tex, height)
+		if batched:
+			bb = stage.batch.add(tex, height, true)
+		if bb == null:
+			bb = Billboard3D.new()
+			stage.sprites.add_child(bb)
+			bb.setup(tex, height)
 	set_process(true)
 
 func set_texture(tex: Texture2D) -> void:
@@ -72,12 +78,19 @@ func _process(delta: float) -> void:
 		shadow.queue_redraw()
 	if bb != null:
 		var flip := scale.x
-		bb.visible = is_visible_in_tree()
+		var vis := is_visible_in_tree()
+		if vis != _last_vis:
+			_last_vis = vis
+			bb.visible = vis
 		bb.place(global_position, hop)
 		bb.set_body(Vector2(body.scale.x * flip, body.scale.y) * size_mul, body.rotation * flip)
-		var a := modulate.a
-		bb.set_tint(Color(sprite.modulate.r, sprite.modulate.g, sprite.modulate.b, a))
-		bb.set_flash(_flash_val, _flash_col)
+		var tc := Color(sprite.modulate.r, sprite.modulate.g, sprite.modulate.b, modulate.a)
+		if tc != _last_tint:
+			_last_tint = tc
+			bb.set_tint(tc)
+		if _flash_val != _last_flash:
+			_last_flash = _flash_val
+			bb.set_flash(_flash_val, _flash_col)
 
 func _exit_tree() -> void:
 	if bb != null and is_instance_valid(bb):
@@ -94,8 +107,6 @@ func _set_hop(v: float) -> void:
 	hop = v
 	if body:
 		body.position.y = -v
-		if shadow:
-			shadow.queue_redraw()
 
 func flash(duration: float = 0.12, color: Color = Color.WHITE) -> void:
 	_flash_col = color

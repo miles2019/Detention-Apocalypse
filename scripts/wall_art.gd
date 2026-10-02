@@ -54,6 +54,16 @@ func _draw() -> void:
 			cur += Vector2(rng.randf_range(-22, 22), rng.randf_range(-14, 18))
 			pts2.append(cur)
 		draw_polyline(pts2, Color(0.12, 0.1, 0.1), 3.0)
+	# Düsterer Verlauf: oben (Decke), unten (Bodenkontakt) und an den Seiten
+	var dk := 0.62 if style != "yard" else 0.2
+	for y in 44:
+		draw_rect(Rect2(0, y, w, 1), Color(0.02, 0.02, 0.06, dk * (1.0 - float(y) / 44.0)))
+	for y in 30:
+		draw_rect(Rect2(0, h - 1 - y, w, 1), Color(0.02, 0.02, 0.06, dk * 0.55 * (1.0 - float(y) / 30.0)))
+	for x in 140:
+		var fa := dk * 0.8 * pow(1.0 - float(x) / 140.0, 1.6)
+		draw_rect(Rect2(x, 0, 1, h), Color(0.02, 0.02, 0.06, fa))
+		draw_rect(Rect2(w - 1 - x, 0, 1, h), Color(0.02, 0.02, 0.06, fa))
 	# Spinnweben in den Ecken
 	_web(Vector2(w - 8, 18), -1.0)
 	_web(Vector2(8, 18), 1.0)

@@ -26,6 +26,8 @@ var events: EventManager
 var chapter := {}
 var _wave_damage_mark := 0.0
 var hub_mode := false
+var _grid := {}
+const CELL := 64.0
 
 const HUB_STATIONS := [
 	{kind = "skills", pos = Vector2(380, 340), title = "Alte Tafel", hint = "Dauerhafte Verbesserungen kaufen", accent = Color(0.5, 0.9, 0.6)},
@@ -197,6 +199,30 @@ func _build_floor_sprite() -> void:
 	add_child(sp)
 
 # ---------------------------------------------------------------- Logik
+## Räumliches Raster der Gegner (einmal pro Physik-Frame): Separation und Treffer fragen nur Nachbarzellen ab
+func _physics_process(_delta: float) -> void:
+	_grid.clear()
+	for e in Game.enemies:
+		if is_instance_valid(e) and not e.dead:
+			var k := Vector2i(int(floorf(e.global_position.x / CELL)), int(floorf(e.global_position.y / CELL)))
+			if _grid.has(k):
+				_grid[k].append(e)
+			else:
+				_grid[k] = [e]
+
+func enemies_near(p: Vector2, r: float) -> Array:
+	var out: Array = []
+	var x0 := int(floorf((p.x - r) / CELL))
+	var x1 := int(floorf((p.x + r) / CELL))
+	var y0 := int(floorf((p.y - r) / CELL))
+	var y1 := int(floorf((p.y + r) / CELL))
+	for cx in range(x0, x1 + 1):
+		for cy in range(y0, y1 + 1):
+			var l = _grid.get(Vector2i(cx, cy))
+			if l != null:
+				out.append_array(l)
+	return out
+
 func _process(delta: float) -> void:
 	_lamp_flicker = maxf(0.0, _lamp_flicker - delta * 1.5)
 	for l in _lamps:
@@ -449,11 +475,16 @@ class FloorDecal extends Node2D:
 	var color := Color(0, 0, 0, 0.3)
 	var life := 2.0
 	var _t := 0.0
+	var _acc := 0.0
 	func _process(delta: float) -> void:
 		_t += delta
+		_acc += delta
 		if _t >= life:
 			queue_free()
-		queue_redraw()
+			return
+		if _acc > 0.2:
+			_acc = 0.0
+			queue_redraw()
 	func _draw() -> void:
 		var c := color
 		c.a *= 1.0 - _t / life

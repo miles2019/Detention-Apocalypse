@@ -72,11 +72,38 @@ func burst(pos: Vector2, color: Color, amount: int = 8, speed: float = 160.0, li
 	curve.add_point(Vector2(1, 0))
 	p.scale_amount_curve = curve
 	p.color = color
+	if shape == "circle":
+		# Rauch-Puffs lösen sich über die Lebenszeit auf (Alpha-Rampe steuert den Shader)
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1, 1, 1, 1.0))
+		ramp.set_color(1, Color(1, 1, 1, 0.0))
+		p.color_ramp = ramp
+		p.scale_amount_min = size * 2.4
+		p.scale_amount_max = size * 4.2
+		p.scale_amount_curve = null
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	stage.fx3.add_child(p)
 	p.position = stage.to3(pos, lift)
 	p.emitting = true
 	get_tree().create_timer(life + 0.3).timeout.connect(p.queue_free)
+
+## Stylisierter Rauch-Shader (aus dem Smoke-Projekt) als gemeinsames Material
+var _smoke_mat: ShaderMaterial
+func smoke_material() -> ShaderMaterial:
+	if _smoke_mat == null:
+		_smoke_mat = ShaderMaterial.new()
+		_smoke_mat.shader = load("res://effects/smoke3d.gdshader")
+		var nz := FastNoiseLite.new()
+		nz.noise_type = FastNoiseLite.TYPE_CELLULAR
+		nz.frequency = 0.045
+		nz.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
+		var nt := NoiseTexture2D.new()
+		nt.width = 128
+		nt.height = 128
+		nt.seamless = true
+		nt.noise = nz
+		_smoke_mat.set_shader_parameter("noise_tex", nt)
+	return _smoke_mat
 
 var _qmesh: QuadMesh
 var _qmesh_c: QuadMesh
@@ -85,6 +112,10 @@ func _quad_mesh(round_shape: bool) -> QuadMesh:
 	if m == null:
 		m = QuadMesh.new()
 		m.size = Vector2(Stage3D.S, Stage3D.S)
+		if round_shape:
+			m.material = smoke_material()
+			_qmesh_c = m
+			return m
 		var mt := StandardMaterial3D.new()
 		mt.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mt.vertex_color_use_as_albedo = true
