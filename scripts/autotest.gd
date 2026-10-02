@@ -183,7 +183,7 @@ func _play(delta: float) -> void:
 			var b = Game.arena.boss
 			print("[AUTOTEST] boss hp=%d atk=%s t=%.2f active=%s stun=%.2f spawn=%.2f pat=%s" % [b.hp, b.atk, b.atk_t, b.active, b.stun_t, b.spawn_t, b._pattern])
 		print("[AUTOTEST] rig scale=", pl.rig.scale, " body=", pl.rig.body.scale, " face=", pl._face, " bbscale=", pl.rig.bb.sprite.scale)
-		print("[AUTOTEST] t=%.0f welle=%d hp=%d/%d enemies=%d lvl=%d geld=%d fps=%d" % [Game.stats.time, Game.wave, pl.hp, pl.max_hp, Game.enemies.size(), Game.level, Game.money, Engine.get_frames_per_second()])
+		print("[AUTOTEST] t=%.0f welle=%d hp=%d/%d enemies=%d lvl=%d geld=%d fps=%d dc=%d obj=%d prim=%d" % [Game.stats.time, Game.wave, pl.hp, pl.max_hp, Game.enemies.size(), Game.level, Game.money, Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])
 	if boss_only and Game.arena.boss != null and is_instance_valid(Game.arena.boss) and not Game.arena.boss.dead:
 		var bb = Game.arena.boss
 		if _total > 22.0 and not bb.phase2:
@@ -222,11 +222,6 @@ func _play(delta: float) -> void:
 		_dash_t = 3.0
 		Input.action_press("dash")
 		get_tree().create_timer(0.05, true, false, true).timeout.connect(func(): Input.action_release("dash"))
-	# gelegentlich Spind testen
-	if Game.stats.hides == 0 and Game.stats.time > 20.0 and not pl.is_hiding:
-		for l in Game.arena.lockers:
-			if l.global_position.distance_to(pl.global_position) < 90.0:
-				l.interact(pl)
 
 func _set_move(v: Vector2) -> void:
 	_act("move_left", v.x < -0.3)

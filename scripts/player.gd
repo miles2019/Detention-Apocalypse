@@ -21,7 +21,6 @@ var items := {}
 var subject_counts := {}
 
 var rig: VisualRig
-var is_hiding := false
 var aim_dir := Vector2.RIGHT
 var manual_aim := false
 var iframes := 0.0
@@ -32,10 +31,8 @@ var dash_dir := Vector2.RIGHT
 var stun_t := 0.0
 var slow_mult := 1.0
 var slow_t := 0.0
-var ambush_t := 0.0
 var knock_vel := Vector2.ZERO
 var move_input := Vector2.ZERO
-var current_locker = null
 var dead := false
 
 var _idle_t := 0.0
@@ -80,7 +77,6 @@ func _physics_process(delta: float) -> void:
 	dash_cd = maxf(0.0, dash_cd - delta)
 	dash_inv = maxf(0.0, dash_inv - delta)
 	stun_t = maxf(0.0, stun_t - delta)
-	ambush_t = maxf(0.0, ambush_t - delta)
 	slow_t = maxf(0.0, slow_t - delta)
 	if slow_t <= 0.0:
 		slow_mult = 1.0
@@ -89,20 +85,12 @@ func _physics_process(delta: float) -> void:
 	Game.stats.time += delta
 	_update_aim()
 	# Eingabe
-	if is_hiding:
-		velocity = Vector2.ZERO
-		if Input.is_action_just_pressed("interact") and current_locker != null:
-			current_locker.leave()
-		_update_visual(delta)
-		return
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if stun_t > 0.0:
 		input = Vector2.ZERO
 	move_input = input
 	if Input.is_action_just_pressed("dash") and dash_cd <= 0.0 and stun_t <= 0.0:
 		_start_dash(input)
-	if Input.is_action_just_pressed("interact"):
-		_interact()
 	var sp := move_speed()
 	if dash_t > 0.0:
 		velocity = dash_dir * 720.0
@@ -147,7 +135,7 @@ func fire_dir(reach: float):
 	return null
 
 func _update_visual(delta: float) -> void:
-	var moving := velocity.length() > 20.0 and not is_hiding
+	var moving := velocity.length() > 20.0
 	if absf(move_input.x) > 0.2:
 		_face = signf(move_input.x)
 	elif manual_aim and absf(aim_dir.x) > 0.2:
@@ -159,6 +147,8 @@ func _update_visual(delta: float) -> void:
 	var stretch := clampf(velocity.length() / 235.0, 0.0, 1.0)
 	if dash_t > 0.0:
 		rig.body.scale = rig.body.scale.lerp(Vector2(1.35, 0.8), 1.0 - exp(-30.0 * delta))
+		# Fake-Sprung: nur das Sprite hebt ab, der Schatten bleibt am Boden und schrumpft
+		rig.hop = sin(clampf(1.0 - dash_t / 0.17, 0.0, 1.0) * PI) * 26.0
 	elif rig.body.scale.distance_to(Vector2.ONE) < 0.2 or true:
 		var bob := 0.0
 		if moving:
@@ -179,7 +169,7 @@ func _update_visual(delta: float) -> void:
 	else:
 		_idle_t += delta
 		# Mr. Scrubbs wischt automatisch, wenn er kurz stillsteht
-		if _idle_t > 1.4 and not is_hiding:
+		if _idle_t > 1.4:
 			_idle_t = 0.0
 			_held.rotation.z = 1.3
 			Juice.burst(global_position + Vector2(18 * _face, -2), Color(1, 1, 1, 0.7), 4, 50.0, 0.4, 2.5, 120.0, Vector2.UP)
@@ -192,8 +182,6 @@ func _update_visual(delta: float) -> void:
 	# Unverwundbarkeits-Blinken
 	rig.visible = true
 	rig.modulate.a = 0.45 if (iframes > 0.0 and int(Time.get_ticks_msec() / 70) % 2 == 0) else 1.0
-	if is_hiding:
-		rig.visible = false
 
 func _afterimage() -> void:
 	var stage: Stage3D = Game.arena.stage
@@ -214,7 +202,7 @@ func _start_dash(input: Vector2) -> void:
 	dash_inv = 0.26
 	dash_cd = 0.85
 	Sfx.play("dash", randf_range(0.95, 1.1), -4.0)
-	Juice.burst(global_position, Color(1, 1, 1, 0.7), 6, 100.0, 0.3, 3.0, 50.0, -dash_dir)
+	Juice.burst(global_position, Color(0.95, 0.95, 0.9, 0.8), 12, 150.0, 0.55, 4.5, 70.0, -dash_dir, 0.0, "circle", 6.0)
 	# Perfektes Ausweichen: kurz vor einer Gefahr
 	var danger := false
 	for p in get_tree().get_nodes_in_group("enemy_proj"):
@@ -226,24 +214,13 @@ func _start_dash(input: Vector2) -> void:
 	if danger:
 		Game.stats.dodges += 1
 		Juice.slowmo(0.3, 0.3)
-		Juice.float_text(global_position + Vector2(0, -80), "Sportlich!", Color(0.6, 0.9, 1.0), 20, true)
+		Juice.float_text_at(global_position, 80, "Sportlich!", Color(0.6, 0.9, 1.0), 20, true)
 		Juice.ring(global_position, 70.0, Color(0.6, 0.9, 1.0), 0.3, 4.0)
 		Sfx.play("perfect")
 
-func _interact() -> void:
-	var best: Node = null
-	var bd := 90.0
-	for o in get_tree().get_nodes_in_group("interactable"):
-		var d: float = o.global_position.distance_to(global_position)
-		if d < bd:
-			bd = d
-			best = o
-	if best != null:
-		best.interact(self)
-
 # ---------------------------------------------------------------- Status
 func is_targetable() -> bool:
-	return not is_hiding and not dead
+	return not dead
 
 func apply_slow(mult: float, t: float) -> void:
 	slow_mult = minf(slow_mult, mult)
@@ -257,7 +234,7 @@ func stun(t: float) -> void:
 		return
 	stun_t = maxf(stun_t, t)
 	Sfx.play("stun")
-	Juice.float_text(global_position + Vector2(0, -90), "Betäubt!", Color(1, 0.9, 0.3), 18, true)
+	Juice.float_text_at(global_position, 90, "Betäubt!", Color(1, 0.9, 0.3), 18, true)
 
 func roll_damage(base: float, crit_bonus: float) -> Dictionary:
 	var c := crit + crit_bonus + (0.10 if syn("Mathe") else 0.0)
@@ -267,8 +244,6 @@ func roll_damage(base: float, crit_bonus: float) -> Dictionary:
 
 func take_damage(amount: float, from_pos: Vector2, area: bool = false) -> bool:
 	if dead or Game.god_mode or iframes > 0.0 or dash_inv > 0.0:
-		return false
-	if is_hiding and not area:
 		return false
 	hp -= amount
 	iframes = 0.75
@@ -282,7 +257,7 @@ func take_damage(amount: float, from_pos: Vector2, area: bool = false) -> bool:
 	Juice.shake(0.4, dir)
 	Juice.hitstop(0.06)
 	Sfx.play("hit_player")
-	Juice.float_text(global_position + Vector2(0, -80), "-%d" % int(round(amount)), Color(1, 0.35, 0.3), 22, true)
+	Juice.float_text_at(global_position, 80, "-%d" % int(round(amount)), Color(1, 0.35, 0.3), 22, true)
 	Juice.burst(global_position + Vector2(0, -24), Color(1, 0.3, 0.3), 8, 170.0, 0.4, 3.5, 180.0, dir)
 	Game.player_hurt.emit()
 	if hp <= 0.0:
@@ -296,7 +271,7 @@ func heal(v: float) -> void:
 	hp = minf(max_hp, hp + v)
 	if hp > before:
 		Sfx.play("heal", 1.0, -4.0)
-		Juice.float_text(global_position + Vector2(0, -80), "+%d" % int(round(hp - before)), Color(0.45, 1, 0.5), 20, true)
+		Juice.float_text_at(global_position, 80, "+%d" % int(round(hp - before)), Color(0.45, 1, 0.5), 20, true)
 		# Heilung: grüne Kreuz-Partikel
 		Juice.burst(global_position + Vector2(0, -26), Color(0.45, 1, 0.5), 8, 90.0, 0.6, 3.0, 180.0, Vector2.UP, -30.0, "circle")
 		rig.squash(0.9, 1.15)
@@ -328,7 +303,7 @@ func equip(id: String) -> bool:
 	if ex != null:
 		if ex.level < ex.data.max_level:
 			ex.level += 1
-			Juice.float_text(global_position + Vector2(0, -90), "%s Stufe %d" % [ex.data.display_name, ex.level], Color(1, 0.9, 0.4), 18, true)
+			Juice.float_text_at(global_position, 90, "%s Stufe %d" % [ex.data.display_name, ex.level], Color(1, 0.9, 0.4), 18, true)
 		_after_inventory()
 		return true
 	if weapons.size() >= slots:
@@ -465,6 +440,3 @@ func lunge(dir: Vector2, amt: float) -> void:
 func squash_body(sx: float, sy: float) -> void:
 	rig.squash(sx, sy, 0.3)
 
-func _draw() -> void:
-	# Interaktions-Hinweis über nahem Spind
-	pass

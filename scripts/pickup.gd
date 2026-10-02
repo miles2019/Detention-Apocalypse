@@ -45,7 +45,7 @@ func _ready() -> void:
 			_make_sprite(Db.i_icon(4), 46.0)
 			_add_light_column()
 			Sfx.play("rare")
-			Juice.float_text(global_position + Vector2(0, -50), "SELTENER DROP!", Color(1, 0.9, 0.3), 20, true)
+			Juice.float_text_at(global_position, 50, "SELTENER DROP!", Color(1, 0.9, 0.3), 20, true)
 	create_tween().tween_property(self, "_pop", 1.0, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _make_sprite(path: String, h: float) -> void:
@@ -129,13 +129,13 @@ func collect(pl: Node) -> void:
 		"coin":
 			Game.add_money(value)
 			Sfx.play("coin", randf_range(0.95, 1.15), -4.0)
-			Juice.float_text(global_position + Vector2(0, -20), "+%d" % value, Color(1, 0.85, 0.2), 16)
+			Juice.float_text_at(global_position, 20, "+%d" % value, Color(1, 0.85, 0.2), 16)
 			Juice.burst(global_position, Color(1, 0.85, 0.2), 4, 90.0, 0.3, 2.5)
 		"heal":
 			pl.heal(float(value))
 		"rare":
 			Game.pending_levelups += 1
-			Juice.float_text(global_position + Vector2(0, -40), "A+ ! Gratis-Upgrade", Color(1, 0.9, 0.3), 20, true)
+			Juice.float_text_at(global_position, 40, "A+ ! Gratis-Upgrade", Color(1, 0.9, 0.3), 20, true)
 			Juice.burst(global_position, Color(1, 0.9, 0.3), 16, 240.0, 0.6, 4.0)
 			Game.stamp_requested.emit("A+", Color(0.9, 0.2, 0.2))
 			Game._check_levelup()

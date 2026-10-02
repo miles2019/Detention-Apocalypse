@@ -85,7 +85,7 @@ func try_hit(proj: Node) -> bool:
 	_text = "2+2=5"
 	_label.text = _text
 	_wob = 1.0
-	Juice.float_text(global_position + Vector2(0, -SIZE.y - 18), "Streufeuer!", Color(0.7, 1, 0.7), 16, true)
+	Juice.float_text_at(global_position, SIZE.y - 18, "Streufeuer!", Color(0.7, 1, 0.7), 16, true)
 	proj._expire(true)
 	return true
 

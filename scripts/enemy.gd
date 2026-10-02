@@ -104,7 +104,7 @@ func stun(t: float) -> void:
 		_end_attack()
 	rig.stunned = true
 	Sfx.play("stun", randf_range(0.9, 1.2), -6.0)
-	Juice.float_text(global_position + Vector2(0, -data.height - 24), "Betäubt!", Color(1, 0.9, 0.3), 15)
+	Juice.float_text_at(global_position, data.height - 24, "Betäubt!", Color(1, 0.9, 0.3), 15)
 
 func _physics_process(delta: float) -> void:
 	if dead or not active:
@@ -122,7 +122,7 @@ func _physics_process(delta: float) -> void:
 	_bar_t = maxf(0.0, _bar_t - delta)
 	_dmg_text_t -= delta
 	if _dmg_text_t <= 0.0 and _dmg_accum > 0.0:
-		Juice.float_text(global_position + Vector2(0, -data.height - 6), str(int(round(_dmg_accum))), Color(1, 1, 1), 15)
+		Juice.float_text_at(global_position, data.height - 6, str(int(round(_dmg_accum))), Color(1, 1, 1), 15)
 		_dmg_accum = 0.0
 		_dmg_text_t = 0.28
 	kb_vel = kb_vel.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
@@ -196,7 +196,7 @@ func _think(delta: float, to_target: Vector2, dist: float, target_ok: bool) -> V
 func _chase(delta: float, to_target: Vector2, dist: float, target_ok: bool, mult: float = 1.0) -> Vector2:
 	if target_ok:
 		return to_target.normalized() * spd() * mult
-	# Ziel verloren (Spind!): zur letzten bekannten Position, dann herumirren
+	# Ziel verloren: zur letzten bekannten Position, dann herumirren
 	if dist > 26.0:
 		return to_target.normalized() * spd() * 0.5
 	_wander_t -= delta
@@ -431,7 +431,7 @@ func take_hit(dmg: float, dir: Vector2, kb: float, crit: bool, opts: Dictionary 
 		Juice.burst(global_position + Vector2(0, -data.height * 0.4), _mat_color(), 4 if not crit else 9, 130.0, 0.35, 3.0, 100.0, dir)
 	if crit:
 		Game.stats.crits += 1
-		Juice.float_text(global_position + Vector2(0, -data.height - 10), str(int(round(dmg))) + "!", Color(1, 0.85, 0.2), 28, true)
+		Juice.float_text_at(global_position, data.height - 10, str(int(round(dmg))) + "!", Color(1, 0.85, 0.2), 28, true)
 		Juice.hitstop(0.055)
 		Juice.shake(0.3, dir)
 		Juice.zoom_pop(0.02)
@@ -439,7 +439,7 @@ func take_hit(dmg: float, dir: Vector2, kb: float, crit: bool, opts: Dictionary 
 	else:
 		_dmg_accum += dmg
 		if _dmg_text_t <= 0.0:
-			Juice.float_text(global_position + Vector2(0, -data.height - 6), str(int(round(_dmg_accum))), Color(1, 1, 1), 15)
+			Juice.float_text_at(global_position, data.height - 6, str(int(round(_dmg_accum))), Color(1, 1, 1), 15)
 			_dmg_accum = 0.0
 			_dmg_text_t = 0.28
 	if opts.get("stun", 0.0) > 0.0:
@@ -464,6 +464,9 @@ func die(dir: Vector2, crit: bool, tags: String = "") -> void:
 	var pos := global_position
 	var mc := _mat_color()
 	Sfx.play("death", randf_range(0.9, 1.3), -6.0)
+	var sc := mc
+	sc.a = 0.5
+	Game.arena.splat(pos, sc, 16.0 if not data.elite else 30.0)
 	Juice.burst(pos + Vector2(0, -data.height * 0.4), mc, 14 if not data.elite else 28, 220.0, 0.55, 4.5, 360.0, Vector2.UP, 160.0)
 	if data.material == "paper":
 		Juice.burst(pos + Vector2(0, -data.height * 0.4), Color.WHITE, 8, 120.0, 0.9, 4.0, 360.0, Vector2.UP, 90.0)
@@ -498,7 +501,7 @@ func _burst_open(pos: Vector2) -> void:
 	Sfx.play("splat", 0.8)
 	Juice.shake(0.35)
 	Juice.ring(pos, 80.0, Color(0.7, 0.8, 1.0), 0.35, 6.0, true)
-	Juice.float_text(pos + Vector2(0, -data.height - 10), "Spind aufgebrochen!", Color(1, 0.9, 0.5), 18, true)
+	Juice.float_text_at(pos, data.height - 10, "Spind aufgebrochen!", Color(1, 0.9, 0.5), 18, true)
 	var ids: Array = data.params.spawn_on_death
 	for i in ids.size():
 		var a := TAU * i / float(ids.size()) + randf() * 0.5

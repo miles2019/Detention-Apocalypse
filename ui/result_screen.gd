@@ -50,7 +50,7 @@ func open(won: bool) -> void:
 	var rows := [
 		["Schaden", dmg_g, ["Sehr überzeugend", "Überzeugend", "Befriedigend", "Ausreichend", "Mangelhaft", "Ungenügend"][dmg_g - 1]],
 		["Sport (Ausweichen)", dodge_g, ["Olympiareif", "Sportlich akzeptabel", "Solide", "Bewegungsarm", "Sitzenbleiber", "Attest nötig"][dodge_g - 1]],
-		["Objektzerstörung", obj_g, ["Gespräch mit der Hausmeisterei erforderlich", "Ziemlich zerstörerisch", "Nutzt Inventar", "Zaghaft", "Scheut Objekte", "Spinde ungenutzt"][obj_g - 1]],
+		["Objektzerstörung", obj_g, ["Gespräch mit der Hausmeisterei erforderlich", "Ziemlich zerstörerisch", "Nutzt Inventar", "Zaghaft", "Scheut Objekte", "Objekte ungenutzt"][obj_g - 1]],
 		["Fach-Synergien", syn_g, ["Ausgezeichnete Gruppenarbeit", "Gute Gruppenarbeit", "Teamfähig", "Einzelgänger", "Schwänzt Gruppenarbeit", "Keine Teilnahme"][syn_g - 1]],
 		["Betragen", conduct_g, ["Vorbildlich", "Gut", "Befriedigend", "Auffällig", "Sehr unruhig", "Elterntermin vereinbaren"][conduct_g - 1]],
 	]

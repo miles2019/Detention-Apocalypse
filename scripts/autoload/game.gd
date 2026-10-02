@@ -43,7 +43,7 @@ var _last_kill_ms := 0
 var settings := {master = 0.8, music = 0.55, sfx = 0.9, voice = 0.9, shake = 1.0, ui_scale = 1.0, reduced_motion = false}
 const ACTIONS := {
 	move_left = "Links", move_right = "Rechts", move_up = "Hoch", move_down = "Runter",
-	interact = "Interagieren", dash = "Ausweichen",
+	dash = "Ausweichen",
 }
 
 func _ready() -> void:
@@ -57,7 +57,7 @@ func _setup_input() -> void:
 	var defaults := {
 		move_left = [KEY_A, KEY_LEFT], move_right = [KEY_D, KEY_RIGHT],
 		move_up = [KEY_W, KEY_UP], move_down = [KEY_S, KEY_DOWN],
-		interact = [KEY_E], dash = [KEY_SPACE, KEY_SHIFT], pause = [KEY_ESCAPE],
+		dash = [KEY_SPACE, KEY_SHIFT], pause = [KEY_ESCAPE],
 	}
 	for a in defaults:
 		if not InputMap.has_action(a):
@@ -70,7 +70,6 @@ func _setup_input() -> void:
 	_joy_axis("move_right", JOY_AXIS_LEFT_X, 1.0)
 	_joy_axis("move_up", JOY_AXIS_LEFT_Y, -1.0)
 	_joy_axis("move_down", JOY_AXIS_LEFT_Y, 1.0)
-	_joy_button("interact", JOY_BUTTON_X)
 	_joy_button("dash", JOY_BUTTON_A)
 	_joy_button("pause", JOY_BUTTON_START)
 	for a in ["aim_left", "aim_right", "aim_up", "aim_down"]:
@@ -149,7 +148,7 @@ func reset_run() -> void:
 	run_won = false
 	enemies.clear()
 	stats = {kills = 0, damage_dealt = 0.0, damage_taken = 0.0, objects_used = 0, dodges = 0,
-		max_chain = 0, money_earned = 0, time = 0.0, crits = 0, hides = 0, synergies = 0, waves = 0}
+		max_chain = 0, money_earned = 0, time = 0.0, crits = 0, synergies = 0, waves = 0}
 
 func xp_needed(lv: int = -1) -> int:
 	if lv < 0:

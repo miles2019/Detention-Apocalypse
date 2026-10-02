@@ -31,7 +31,10 @@ func slowmo(duration: float = 0.25, scale: float = 0.3) -> void:
 	HitStop.freeze(get_tree(), duration, scale)
 
 func float_text(pos: Vector2, text: String, color: Color = Color.WHITE, size: int = 18, pop: bool = false, rise: float = 46.0) -> void:
-	FloatingText.spawn(fx_parent(), pos, text, color, size, pop, rise)
+	FloatingText.spawn(pos, 40.0, text, color, size, pop, rise)
+
+func float_text_at(pos: Vector2, lift_px: float, text: String, color: Color = Color.WHITE, size: int = 18, pop: bool = false, rise: float = 46.0) -> void:
+	FloatingText.spawn(pos, lift_px, text, color, size, pop, rise)
 
 func ring(pos: Vector2, r: float, color: Color, dur: float = 0.4, width: float = 6.0, fill: bool = false) -> void:
 	RingFX.spawn(fx_parent(), pos, r, color, dur, width, fill)

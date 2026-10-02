@@ -24,7 +24,7 @@ func snap() -> void:
 		_apply(0.0)
 
 func _clamped(p: Vector2) -> Vector2:
-	return Vector2(clampf(p.x, 520.0, 1080.0), clampf(p.y, 400.0, 700.0))
+	return Vector2(clampf(p.x, 520.0, 1080.0), clampf(p.y, 330.0, 700.0))
 
 func _apply(_delta: float) -> void:
 	var dist := BASE_DIST / maxf(0.3, base_zoom + Juice.shaker.zoom_kick)

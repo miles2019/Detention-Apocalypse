@@ -15,8 +15,7 @@ func _init(d: WeaponData, p: Node) -> void:
 	current_cd = cooldown()
 
 func dmg() -> float:
-	var ambush: float = 1.5 if player.ambush_t > 0.0 else 1.0
-	return data.damage * (1.0 + 0.3 * float(level - 1)) * player.dmg_mult * ambush
+	return data.damage * (1.0 + 0.3 * float(level - 1)) * player.dmg_mult
 
 func cooldown() -> float:
 	return data.cooldown * pow(0.9, float(level - 1)) / player.atk_speed
@@ -36,7 +35,7 @@ func update(delta: float) -> void:
 	timer -= delta
 	if timer > 0.0:
 		return
-	if player.is_hiding or player.stun_t > 0.0:
+	if player.stun_t > 0.0:
 		return
 	var dir = player.fire_dir(data.reach)
 	if dir == null:
@@ -100,6 +99,7 @@ func _fire_flame(dir: Vector2) -> void:
 			crit_bonus = 0.0,
 		})
 	Juice.burst(base_pos, Color(1, 0.7, 0.2), 4, 120.0, 0.3, 3.0, 40.0, dir)
+	Game.arena.stage.pulse_light(base_pos + dir * 60.0, Color(1.0, 0.6, 0.2), 1.5, 2.2, 0.28)
 	# kleine Brandspur am Boden
 	var spot: Vector2 = player.global_position + dir * data.reach * 0.75
 	Game.arena.decal(spot, Color(0.1, 0.05, 0.02, 0.35), 14.0, 2.5)

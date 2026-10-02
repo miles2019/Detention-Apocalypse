@@ -75,6 +75,7 @@ func _activate() -> void:
 		mul = Game.phase_mod("explosion")
 	var big := kind in ["slam", "impact", "chalk"]
 	if big:
+		Game.arena.stage.pulse_light(global_position, color, 1.6, 2.6, 0.3)
 		Juice.ring(global_position, radius * mul, color, 0.35, 8.0, true)
 		Juice.burst(global_position, color, 14, 220.0, 0.5, 4.0)
 		if sound != "":
@@ -113,10 +114,10 @@ func _apply_zone(delta: float) -> void:
 		_tick = 0.45
 	if pl != null:
 		var d = pl.global_position.distance_to(global_position)
-		if kind == "acid" and d < 38.0 and not pl.is_hiding:
+		if kind == "acid" and d < 38.0:
 			# Reinigungs-Aura von Mr. Scrubbs: Säure wird aufgewischt und heilt
 			pl.heal(2.0)
-			Juice.float_text(global_position + Vector2(0, -20), "Sauber gewischt!", Color(0.6, 1, 0.8), 16)
+			Juice.float_text_at(global_position, 20, "Sauber gewischt!", Color(0.6, 1, 0.8), 16)
 			Juice.burst(global_position, Color(0.6, 1, 0.8), 8, 120.0, 0.4, 3.0)
 			duration = _t - telegraph
 			return

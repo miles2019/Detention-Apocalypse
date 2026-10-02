@@ -20,7 +20,6 @@ var phases: PhaseManager
 var announcer: Announcer
 var boards: Array = []
 var bins: Array = []
-var lockers: Array = []
 var collect_all := false
 var boss: Enemy = null
 var _lamps: Array = []
@@ -63,7 +62,7 @@ func _ready() -> void:
 	add_child(phases)
 	announcer = Announcer.new()
 	add_child(announcer)
-	queue_redraw()
+	_build_floor_sprite()
 
 func _exit_tree() -> void:
 	if Game.arena == self:
@@ -102,11 +101,6 @@ func _add_rect_shape(body: StaticBody2D, r: Rect2) -> void:
 	body.add_child(cs)
 
 func _build_objects() -> void:
-	for x in [250.0, 800.0, 1350.0]:
-		var l := Locker.new()
-		l.position = Vector2(x, 205)
-		entities.add_child(l)
-		lockers.append(l)
 	for pos in [Vector2(520, 880), Vector2(1100, 580)]:
 		var b := TrashBin.new()
 		b.position = pos
@@ -138,37 +132,23 @@ func _build_lamps() -> void:
 		_lamps.append(s)
 
 # ---------------------------------------------------------------- Boden (einmal gezeichnet)
-func _draw() -> void:
-	var font := ThemeDB.fallback_font
-	# Hintergrund
-	draw_rect(Rect2(Vector2.ZERO, WORLD), Color(0.09, 0.1, 0.14))
-	# Linoleum-Schachbrett
-	var ts := 82.0
-	var y := PLAY.position.y
-	var row := 0
-	while y < PLAY.end.y:
-		var x := PLAY.position.x
-		var col := 0
-		while x < PLAY.end.x:
-			var c := Color(0.78, 0.8, 0.66) if (row + col) % 2 == 0 else Color(0.7, 0.74, 0.6)
-			draw_rect(Rect2(x, y, minf(ts, PLAY.end.x - x), minf(ts, PLAY.end.y - y)), c)
-			x += ts
-			col += 1
-		y += ts
-		row += 1
-	# Schmutz / Kratzer / Schleimspuren des Meteoriten
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 42
-	for i in 60:
-		var p := Vector2(rng.randf_range(PLAY.position.x, PLAY.end.x), rng.randf_range(PLAY.position.y, PLAY.end.y))
-		draw_line(p, p + Vector2(rng.randf_range(-24, 24), rng.randf_range(-8, 8)), Color(0.4, 0.42, 0.34, 0.25), 2.0)
-	for i in 9:
-		var p2 := Vector2(rng.randf_range(PLAY.position.x + 60, PLAY.end.x - 60), rng.randf_range(PLAY.position.y + 40, PLAY.end.y - 40))
-		draw_circle(p2, rng.randf_range(18, 38), Color(0.4, 0.9, 0.3, 0.13))
-		draw_circle(p2 + Vector2(6, -3), 9, Color(0.5, 1.0, 0.4, 0.14))
-	# Spielfeld-Begrenzung
-	draw_rect(PLAY, Color(0.1, 0.1, 0.14), false, 6.0)
-	# Wände und Tische sind 3D-Objekte (Stage3D.build_props)
+## Statischer Boden: einmal in einen SubViewport gemalt und als ein einziges Sprite gezeichnet (Performance)
+func _build_floor_sprite() -> void:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(WORLD * Stage3D.GSCALE)
+	vp.disable_3d = true
+	vp.transparent_bg = false
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var painter := FloorPainter.new()
+	painter.scale = Vector2.ONE * Stage3D.GSCALE
+	vp.add_child(painter)
+	stage.add_child(vp)
+	var sp := Sprite2D.new()
+	sp.texture = vp.get_texture()
+	sp.centered = false
+	sp.scale = Vector2.ONE / Stage3D.GSCALE
+	sp.z_index = -20
+	add_child(sp)
 
 # ---------------------------------------------------------------- Logik
 func _process(delta: float) -> void:
@@ -271,6 +251,19 @@ func spawn_enemy(id: String, pos: Vector2, hp_mult: float = 1.0) -> Enemy:
 
 func clamp_to_arena(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, PLAY.position.x + 30, PLAY.end.x - 30), clampf(p.y, PLAY.position.y + 30, PLAY.end.y - 30))
+
+func splat(pos: Vector2, color: Color, r: float) -> void:
+	# dauerhafter Farbfleck (Decal) mit Obergrenze für Performance
+	var nodes := get_tree().get_nodes_in_group("splat")
+	if nodes.size() > 70:
+		nodes[0].queue_free()
+	var d := FloorDecal.new()
+	d.r = r
+	d.color = color
+	d.life = 14.0
+	d.add_to_group("splat")
+	d.global_position = pos
+	floor_fx.add_child(d)
 
 func decal(pos: Vector2, color: Color, r: float, life: float) -> void:
 	var d := FloorDecal.new()

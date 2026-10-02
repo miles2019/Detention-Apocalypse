@@ -9,7 +9,7 @@ const CHARS := [
 	{id = "scrubbs", name = "Mr. Scrubbs", title = "Der Hausmeister", unlocked = true,
 		desc = "Ausgewogenes Startprofil. Seine Reinigungs-Aura wischt Säurepfützen auf und verwandelt sie in Heilung.",
 		hp = 3, speed = 3, slots = 4, diff = "Normal", weapon = "mop", weapon_name = "Wischmopp", ability = "Reinigungs-Aura",
-		goals = ["Überlebe die Mutierte Schule (Kapitel 1)", "Verstecke dich 5x im Spind", "Besiege Frau Eisenhart ohne Treffer"]},
+		goals = ["Überlebe die Mutierte Schule (Kapitel 1)", "Wische 10 Säurepfützen auf", "Besiege Frau Eisenhart ohne Treffer"]},
 	{id = "justus", name = "Justus", title = "Der Streber", unlocked = false, desc = "+100 % Fernkampfschaden, aber wenig Leben. Mehr XP nach jeder Welle.", hp = 1, speed = 3, slots = 4, diff = "Schwer", weapon = "", weapon_name = "?", ability = "Hausaufgaben", goals = []},
 	{id = "tobi", name = "Tobi", title = "Der Rowdy", unlocked = false, desc = "Schneller Nahkämpfer mit Zwillings-Schleuder-Katapult.", hp = 3, speed = 4, slots = 3, diff = "Mittel", weapon = "", weapon_name = "?", ability = "Rempler", goals = []},
 	{id = "mia", name = "Mia", title = "Die Schulsprecherin", unlocked = false, desc = "Beschwört Klassensprecher-Drohnen mit Papierschnipseln.", hp = 2, speed = 3, slots = 4, diff = "Mittel", weapon = "", weapon_name = "?", ability = "Drohnen", goals = []},

@@ -22,6 +22,8 @@ static func create(parent: Node, pos: Vector2, props: Dictionary) -> Shockwave:
 		s.set(k, props[k])
 	s.z_index = 22
 	parent.add_child(s)
+	if Game.arena != null:
+		Game.arena.stage.pulse_light(pos, props.get("color", Color(0.8, 0.55, 1.0)), 1.3, 3.0, 0.35)
 	return s
 
 func _radius_at(k: float) -> float:

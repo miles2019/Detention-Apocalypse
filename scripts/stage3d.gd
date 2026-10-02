@@ -23,6 +23,8 @@ var text_layer: Control
 var overlay: Control
 var _tint := Color.WHITE
 var _wall_mats: Array = []
+var _desks: Array = []
+var _lights: Array = []
 
 func _ready() -> void:
 	ground = SubViewport.new()
@@ -30,6 +32,8 @@ func _ready() -> void:
 	ground.transparent_bg = false
 	ground.disable_3d = true
 	ground.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	if OS.get_cmdline_user_args().has("--lowground"):
+		ground.size = Vector2i(int(WORLD.x), int(WORLD.y))
 	ground.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	ground.gui_disable_input = true
 	add_child(ground)
@@ -45,6 +49,18 @@ func _ready() -> void:
 	camera = StageCamera.new()
 	add_child(camera)
 	camera.current = true
+	# Tilt-Shift + Vignette (Diorama-Look), unterhalb von HUD und Overlay
+	var post := CanvasLayer.new()
+	post.layer = 2
+	add_child(post)
+	var pr := ColorRect.new()
+	pr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pm := ShaderMaterial.new()
+	pm.shader = load("res://effects/tiltshift.gdshader")
+	pr.material = pm
+	post.add_child(pr)
+	post.visible = not OS.get_cmdline_user_args().has("--notilt")
 	# Screen-Space-Ebene: Gesundheitsbalken, Warnsymbole, schwebende Zahlen
 	var cl := CanvasLayer.new()
 	cl.layer = 3
@@ -66,7 +82,7 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.06, 0.1)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.78, 0.8, 0.95)
+	env.ambient_light_color = Color(1.0, 0.95, 0.86)
 	env.ambient_light_energy = 0.38
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
@@ -76,8 +92,8 @@ func _build_environment() -> void:
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-62.0, -28.0, 0.0)
 	sun.light_energy = 0.46
-	sun.light_color = Color(1.0, 0.96, 0.88)
-	sun.shadow_enabled = true
+	sun.light_color = Color(1.0, 0.94, 0.84)
+	sun.shadow_enabled = not OS.get_cmdline_user_args().has("--noshadow")
 	sun.shadow_blur = 2.0
 	sun.directional_shadow_max_distance = 28.0
 	add_child(sun)
@@ -125,12 +141,44 @@ func mouse_to_world() -> Vector2:
 func set_tint(c: Color) -> void:
 	_tint = c
 	floor_mat.albedo_color = c
-	sun.light_color = Color(1.0, 0.96, 0.88) * c
-	env.ambient_light_color = Color(0.78, 0.8, 0.95) * c
+	sun.light_color = Color(1.0, 0.94, 0.84) * c
+	env.ambient_light_color = Color(1.0, 0.95, 0.86) * c
 	for m in _wall_mats:
 		m.albedo_color = m.get_meta("base") * c
 
 # ---------------------------------------------------------------- Aufbau Requisiten
+func _wall_texture(kind: String, size_px: Vector2) -> Texture2D:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(size_px * 2.0)
+	vp.disable_3d = true
+	vp.transparent_bg = false
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var art := WallArt.new()
+	art.kind = kind
+	art.size = size_px
+	art.scale = Vector2(2, 2)
+	vp.add_child(art)
+	add_child(vp)
+	return vp.get_texture()
+
+func _textured_quad(size: Vector2, pos: Vector3, yaw_deg: float, tex: Texture2D) -> void:
+	var mi := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = size
+	mi.mesh = qm
+	var mt := StandardMaterial3D.new()
+	mt.albedo_texture = tex
+	mt.roughness = 1.0
+	mt.metallic_specular = 0.0
+	mt.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mi.material_override = mt
+	mi.position = pos
+	mi.rotation_degrees.y = yaw_deg
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	props.add_child(mi)
+	_wall_mats.append(mt)
+	mt.set_meta("base", Color.WHITE)
+
 func _box(size: Vector3, pos: Vector3, color: Color, shadows: bool = true, tint_with_phase: bool = false) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -154,51 +202,25 @@ func build_props(obstacles: Array) -> void:
 	# Rückwand
 	var wall_h := 2.1
 	_box(Vector3(WORLD.x * S + 4.0, wall_h, 0.4), Vector3(WORLD.x * S * 0.5, wall_h * 0.5, P.position.y * S - 0.2), Color(0.34, 0.38, 0.55), true, true)
-	_box(Vector3(WORLD.x * S + 4.0, 0.7, 0.42), Vector3(WORLD.x * S * 0.5, 0.35, P.position.y * S - 0.19), Color(0.2, 0.23, 0.36), true, true)
 	# Seitenwände und niedrige Frontkante
 	var depth := (P.end.y - P.position.y) * S
 	_box(Vector3(0.4, 1.5, depth + 0.4), Vector3(P.position.x * S - 0.2, 0.75, (P.position.y + P.end.y) * S * 0.5), Color(0.28, 0.32, 0.48), true, true)
 	_box(Vector3(0.4, 1.5, depth + 0.4), Vector3(P.end.x * S + 0.2, 0.75, (P.position.y + P.end.y) * S * 0.5), Color(0.28, 0.32, 0.48), true, true)
 	_box(Vector3(WORLD.x * S, 0.3, 0.3), Vector3(WORLD.x * S * 0.5, 0.15, P.end.y * S + 0.15), Color(0.2, 0.22, 0.34), true, true)
-	# Fenster mit neongrünem Schleim-Himmel (leuchten)
-	for wx in [140.0, 400.0, 1130.0, 1390.0]:
-		var win := MeshInstance3D.new()
-		var qm := QuadMesh.new()
-		qm.size = Vector2(0.95, 0.75)
-		win.mesh = qm
-		var wm := StandardMaterial3D.new()
-		wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		wm.albedo_color = Color(0.45, 1.0, 0.5)
-		win.material_override = wm
-		win.position = Vector3((wx + 45.0) * S, 1.35, P.position.y * S + 0.005)
-		win.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		props.add_child(win)
-		_box(Vector3(1.05, 0.05, 0.08), Vector3((wx + 45.0) * S, 0.94, P.position.y * S + 0.02), Color(0.3, 0.2, 0.1), false)
-	# Wandtafel
-	var bd := MeshInstance3D.new()
-	var bq := QuadMesh.new()
-	bq.size = Vector2(4.0, 0.95)
-	bd.mesh = bq
-	var bm := StandardMaterial3D.new()
-	bm.albedo_color = Color(0.11, 0.26, 0.2)
-	bd.material_override = bm
-	bd.position = Vector3(800.0 * S, 1.3, P.position.y * S + 0.006)
-	props.add_child(bd)
-	_box(Vector3(4.15, 1.1, 0.04), Vector3(800.0 * S, 1.3, P.position.y * S - 0.01), Color(0.45, 0.3, 0.15), false)
-	var lb := Label3D.new()
-	lb.text = "NACHSITZEN: 100x \"Ich wische nicht\"\nMutation = Schulveranstaltung"
-	lb.font_size = 40
-	lb.pixel_size = 0.0035
-	lb.modulate = Color(0.95, 0.95, 0.88, 0.9)
-	lb.position = Vector3(800.0 * S, 1.3, P.position.y * S + 0.012)
-	lb.shaded = false
-	props.add_child(lb)
+	# Gemalte Wandtexturen (Fenster, Türen, Spinde, Pinnwand, Risse, Spinnweben)
+	var back_tex := _wall_texture("back", Vector2(1600, 210))
+	_textured_quad(Vector2(WORLD.x * S, 2.1), Vector3(WORLD.x * S * 0.5, 1.05, P.position.y * S + 0.004), 0.0, back_tex)
+	var side_tex := _wall_texture("side", Vector2(825, 150))
+	var mid_z := (P.position.y + P.end.y) * S * 0.5
+	_textured_quad(Vector2(depth, 1.5), Vector3(P.position.x * S + 0.004, 0.75, mid_z), 90.0, side_tex)
+	_textured_quad(Vector2(depth, 1.5), Vector3(P.end.x * S - 0.004, 0.75, mid_z), -90.0, side_tex)
 	# Schulbänke (3D, werfen Schatten)
 	for r in obstacles:
 		_build_desk(r)
 
 func _build_desk(r: Rect2) -> void:
 	var top_y := 0.52
+	var first := props.get_child_count()
 	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
 	var c := (r2.position + r2.size * 0.5) * S
 	var w := r2.size.x * S
@@ -211,6 +233,13 @@ func _build_desk(r: Rect2) -> void:
 	# Heft und Stift (Deko)
 	_box(Vector3(0.34, 0.015, 0.22), Vector3(c.x - w * 0.25, top_y + 0.045, c.y), Color(0.92, 0.92, 0.97), false)
 	_box(Vector3(0.36, 0.03, 0.03), Vector3(c.x + w * 0.2, top_y + 0.05, c.y - 0.05), Color(1.0, 0.8, 0.1), false)
+	var mats: Array = []
+	for i in range(first, props.get_child_count()):
+		var mt: StandardMaterial3D = props.get_child(i).material_override
+		if not OS.get_cmdline_user_args().has("--nodesktrans"):
+			mt.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+		mats.append(mt)
+	_desks.append({rect = r2, mats = mats, alpha = 1.0})
 
 ## Hübsche Aufsatz-Meshes für Mülleimer / Tafel (von den Objekt-Skripten genutzt)
 func make_mesh_node(mesh: Mesh, color: Color) -> MeshInstance3D:
@@ -222,6 +251,51 @@ func make_mesh_node(mesh: Mesh, color: Color) -> MeshInstance3D:
 	mi.material_override = mt
 	props.add_child(mi)
 	return mi
+
+func _process(delta: float) -> void:
+	_update_occlusion(delta)
+
+## Bänke werden transparent, wenn Mr. Scrubbs hinter ihnen steht (Sichtlinie bleibt frei)
+func _update_occlusion(delta: float) -> void:
+	var pl = Game.player
+	if pl == null:
+		return
+	var pp: Vector2 = pl.global_position
+	for d in _desks:
+		var r: Rect2 = d.rect
+		var behind: bool = pp.x > r.position.x - 30.0 and pp.x < r.end.x + 30.0 and pp.y > r.position.y - 130.0 and pp.y < r.end.y + 4.0
+		var target := 0.3 if behind else 1.0
+		if absf(d.alpha - target) > 0.01:
+			d.alpha = lerpf(d.alpha, target, 1.0 - exp(-12.0 * delta))
+			for m in d.mats:
+				var c: Color = m.albedo_color
+				c.a = d.alpha
+				m.albedo_color = c
+
+## Kurzer farbiger Lichtblitz (Mündungsfeuer, Explosionen) – kleiner Pool, daher günstig
+func pulse_light(p2: Vector2, color: Color, energy: float = 1.6, range_: float = 2.4, dur: float = 0.25) -> void:
+	var l: OmniLight3D = null
+	for x in _lights:
+		if not x.visible:
+			l = x
+			break
+	if l == null:
+		if _lights.size() >= 5:
+			return
+		l = OmniLight3D.new()
+		l.shadow_enabled = false
+		l.light_energy = 0.0
+		l.visible = false
+		add_child(l)
+		_lights.append(l)
+	l.visible = true
+	l.light_color = color
+	l.omni_range = range_
+	l.position = to3(p2, 40.0)
+	l.light_energy = energy
+	var tw := l.create_tween()
+	tw.tween_property(l, "light_energy", 0.0, dur)
+	tw.tween_callback(func(): l.visible = false)
 
 class StageOverlay extends Control:
 	var stage: Stage3D

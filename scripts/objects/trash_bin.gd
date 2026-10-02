@@ -59,7 +59,7 @@ func kick(dir: Vector2, power: float) -> void:
 	Juice.shake(0.15, dir)
 	Juice.burst(global_position, Color(0.8, 0.8, 0.8), 6, 120.0, 0.3, 3.0, 90.0, dir)
 	Game.stats.objects_used += 1
-	Juice.float_text(global_position + Vector2(0, -50), "Strike!", Color(1, 0.85, 0.3), 16, true)
+	Juice.float_text_at(global_position, 50, "Strike!", Color(1, 0.85, 0.3), 16, true)
 
 func try_kick_by_projectile(proj: Node) -> void:
 	if state == S.AVAILABLE and proj.global_position.distance_to(global_position) < 28.0:

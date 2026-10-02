@@ -15,6 +15,7 @@ var _puffs: Array = []
 
 func _ready() -> void:
 	z_index = 18
+	Game.arena.stage.pulse_light(global_position, Color(0.8, 0.9, 1.0), 1.4, 3.0, 0.5)
 	if big:
 		_life = 4.4
 	for i in 9:
