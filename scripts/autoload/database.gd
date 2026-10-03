@@ -35,6 +35,10 @@ func _ready() -> void:
 	_build_waves()
 	_build_lines()
 	DbExtra.build(self)
+	# Bodentexturen vorab laden: der Boden wird nur einmal gezeichnet und braucht sie sofort
+	for t in ["grass", "tile", "wood"]:
+		if ResourceLoader.exists("res://assets/textures/%s.png" % t):
+			tex("res://assets/textures/%s.png" % t)
 
 func tex(path: String) -> Texture2D:
 	if path == "":

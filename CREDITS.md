@@ -8,3 +8,17 @@
 - "[Free] Modular Interior Walls" (https://skfb.ly/pNGQA) by SimplePolygon
 
 Die Namensnennung muss im Spiel oder in der Begleitdokumentation erhalten bleiben, solange die Modelle verwendet werden.
+
+## Weitere Pakete (itch.io)
+
+Die Lizenztexte dieser Seiten konnten nicht automatisch abgerufen werden – vor einer Veröffentlichung bitte auf der jeweiligen Seite prüfen.
+
+- "Classroom Asset Pack" by Styloo – https://styloo.itch.io/classroom-asset-pack
+  Verwendet: Labortisch, Kolben, Globus, Feuerlöscher, Schreibtisch und Pflanze (assets/models/styloo)
+- "Hand Painted Tileable Textures" by beefpuppy – https://beefpuppy.itch.io/hptt
+  Verwendet: Kacheln (Laborboden), Holz (Bibliotheksboden) (assets/textures/tile.png, wood.png)
+- "Handpainted Grass & Ground Textures" by atapataco – https://atapataco.itch.io/handpainted-grass-ground-textures
+  Verwendet: Gras (Schulhof) (assets/textures/grass.png)
+
+Nicht verwendet: "Post-Apocalyptic Pharmacy" by Atomic Realm – die beiliegende Lizenz verbietet das Weiterverteilen der Dateien,
+sie liegen deshalb nur im lokalen Ordner `source/` und nicht im Repository.

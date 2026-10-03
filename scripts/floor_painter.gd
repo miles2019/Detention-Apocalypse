@@ -2,6 +2,9 @@ class_name FloorPainter
 extends Node2D
 ## Malt den statischen Boden (Fliesen, Fugen, Farbspritzer, Papierhaufen) einmalig in einen SubViewport.
 
+func _ready() -> void:
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+
 func _draw() -> void:
 	# Hintergrund
 	draw_rect(Rect2(Vector2.ZERO, Arena.WORLD), Color(0.07, 0.08, 0.1))
@@ -25,6 +28,21 @@ func _draw() -> void:
 			col += 1
 		y += ts
 		row += 1
+	# Handgemalte Texturen über den Farbfliesen (Labor: Kacheln, Bibliothek: Holz) – siehe CREDITS.md
+	var overlay := {"lab": ["res://assets/textures/tile.png", 0.6, Color(1.0, 1.0, 1.0, 0.42)],
+		"library": ["res://assets/textures/wood.png", 0.75, Color(0.95, 0.8, 0.7, 0.5)]}
+	if overlay.has(style) and ResourceLoader.exists(overlay[style][0]):
+		var tex: Texture2D = Db.tex(overlay[style][0])
+		var sc: float = overlay[style][1]
+		var tsz := tex.get_size() * sc
+		var ty := Arena.PLAY.position.y
+		while ty < Arena.PLAY.end.y:
+			var tx := Arena.PLAY.position.x
+			while tx < Arena.PLAY.end.x:
+				var dst := Rect2(tx, ty, minf(tsz.x, Arena.PLAY.end.x - tx), minf(tsz.y, Arena.PLAY.end.y - ty))
+				draw_texture_rect_region(tex, dst, Rect2(Vector2.ZERO, dst.size / sc), overlay[style][2])
+				tx += tsz.x
+			ty += tsz.y
 	var gx := Arena.PLAY.position.x
 	while gx <= Arena.PLAY.end.x:
 		draw_line(Vector2(gx, Arena.PLAY.position.y), Vector2(gx, Arena.PLAY.end.y), pal.grout, 3.0)
@@ -46,9 +64,10 @@ func _draw() -> void:
 			var dp := p + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(50.0, 110.0)
 			draw_circle(dp, rng.randf_range(3.0, 8.0), paint[rng.randi() % paint.size()])
 	if style == "yard":
-		for i in 7:
+		var grass: Texture2D = Db.tex("res://assets/textures/grass.png") if ResourceLoader.exists("res://assets/textures/grass.png") else null
+		for i in 9:
 			var gp := Vector2(rng.randf_range(Arena.PLAY.position.x, Arena.PLAY.end.x), rng.randf_range(Arena.PLAY.position.y, Arena.PLAY.end.y))
-			_blob(gp, rng.randf_range(80.0, 170.0), Color(0.3, 0.55, 0.28, 0.9), rng)
+			_blob(gp, rng.randf_range(90.0, 190.0), Color(0.3, 0.55, 0.28, 0.9) if grass == null else Color(1.0, 1.0, 1.0, 0.97), rng, grass)
 		# Basketballfeld und Hüpfkästchen
 		draw_rect(Rect2(1120, 420, 380, 280), Color(1, 1, 1, 0.5), false, 5.0)
 		draw_arc(Vector2(1310, 560), 60.0, 0, TAU, 32, Color(1, 1, 1, 0.5), 5.0)
@@ -83,13 +102,23 @@ func _draw() -> void:
 			draw_circle(corner, 260.0 - r * 38.0, Color(0.02, 0.02, 0.06, strength * 0.09))
 	draw_rect(Arena.PLAY, Color(0.1, 0.1, 0.14), false, 6.0)
 
-func _blob(center: Vector2, r: float, color: Color, rng: RandomNumberGenerator) -> void:
+func _blob(center: Vector2, r: float, color: Color, rng: RandomNumberGenerator, tex: Texture2D = null) -> void:
 	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
 	var n := 16
 	for i in n:
 		var a := TAU * i / n
 		var rr := r * rng.randf_range(0.65, 1.25)
 		pts.append(center + Vector2(cos(a) * rr, sin(a) * rr * 0.85))
+		uvs.append(pts[pts.size() - 1] / 700.0)
+	if tex != null:
+		# Rasenfläche mit dunklem Rand und handgemalter Grastextur
+		var edge := PackedVector2Array()
+		for p in pts:
+			edge.append(center + (p - center) * 1.06)
+		draw_colored_polygon(edge, Color(0.16, 0.3, 0.14, 0.85))
+		draw_polygon(pts, PackedColorArray([color]), uvs, tex)
+		return
 	draw_colored_polygon(pts, color)
 
 func _paper_pile(p: Vector2, rng: RandomNumberGenerator) -> void:

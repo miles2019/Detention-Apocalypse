@@ -7,6 +7,7 @@ extends RefCounted
 
 const CLASSROOM := "res://assets/models/classroom.fbx"
 const TRASH := "res://assets/models/trash_can.fbx"
+const STYLOO := "res://assets/models/styloo/%s.glb"      # Styloo Classroom Asset Pack (einzelne .glb je Objekt)
 
 static var _cache := {}
 

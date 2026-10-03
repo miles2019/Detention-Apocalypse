@@ -273,6 +273,10 @@ func build_props(obstacles: Array, style: String = "classroom") -> void:
 func _build_desk(r: Rect2, style: String = "classroom") -> void:
 	if style == "classroom" and _build_model_desk(r):
 		return
+	if style == "lab" and _build_lab_table(r):
+		return
+	if style == "library" and _build_office_desk(r):
+		return
 	var top_y := 0.52
 	var first := props.get_child_count()
 	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
@@ -352,6 +356,68 @@ func _build_model_desk(r: Rect2) -> bool:
 			mats.append(mt)
 	_desks.append({rect = r2, mats = mats, alpha = 1.0, src = r, nodes = nodes})
 	return true
+
+## Labortisch (Styloo-Paket) mit Kolben und Globus als Deko
+func _build_lab_table(r: Rect2) -> bool:
+	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
+	var c := (r2.position + r2.size * 0.5) * S
+	var w := r2.size.x * S
+	var table := _place_model(ModelLib.STYLOO % "chem_table", "", Vector3(c.x, 0.0, c.y), w * 0.98, 0.0)
+	if table == null:
+		return false
+	var nodes: Array = [table]
+	var top: float = table.get_meta("top")
+	var flask := _place_model(ModelLib.STYLOO % "chem_vial_002", "", Vector3(c.x - w * 0.3, top, c.y), 0.13, 0.0)
+	if flask != null:
+		nodes.append(flask)
+	if int(r.position.x + r.position.y) % 3 == 0:
+		var globe := _place_model(ModelLib.STYLOO % "chem_globe_1", "", Vector3(c.x + w * 0.28, top, c.y), 0.2, 0.6)
+		if globe != null:
+			nodes.append(globe)
+	_register_models(r, r2, nodes, false)
+	return true
+
+## Schreibtisch des Rektors als großer Tisch in der Bibliothek
+func _build_office_desk(r: Rect2) -> bool:
+	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
+	var c := (r2.position + r2.size * 0.5) * S
+	var desk := _place_fit(ModelLib.STYLOO % "office_desk", Vector3(c.x, 0.0, c.y), Vector3(r2.size.x * S * 0.98, 0.62, r2.size.y * S * 1.05), 0.0)
+	if desk == null:
+		return false
+	var nodes: Array = [desk]
+	var plant := _place_model(ModelLib.STYLOO % "office_plant", "", Vector3(c.x + r2.size.x * S * 0.36, 0.62, c.y), 0.2, 0.0)
+	if plant != null:
+		nodes.append(plant)
+	_register_models(r, r2, nodes, false)
+	return true
+
+## Modell-Knoten als Hindernis-Optik anmelden (Ausblenden hinter dem Spieler, Zertrümmern)
+func _register_models(src: Rect2, rect: Rect2, nodes: Array, tall: bool) -> void:
+	var mats: Array = []
+	for n in nodes:
+		var mi: MeshInstance3D = n
+		for s in mi.mesh.get_surface_count():
+			var mt: StandardMaterial3D = mi.get_surface_override_material(s)
+			if not OS.get_cmdline_user_args().has("--nodesktrans"):
+				mt.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+			mats.append(mt)
+	var entry := {rect = rect, mats = mats, alpha = 1.0, src = src, nodes = nodes}
+	if tall:
+		entry["tall"] = true
+	_desks.append(entry)
+
+## Modell ungleichmäßig auf eine Zielgröße (Breite, Höhe, Tiefe) einpassen
+func _place_fit(file: String, pos: Vector3, target: Vector3, yaw: float) -> MeshInstance3D:
+	var mi := ModelLib.instance(file, "")
+	if mi == null:
+		return null
+	var size: Vector3 = mi.get_meta("size")
+	mi.scale = Vector3(target.x / maxf(size.x, 0.0001), target.y / maxf(size.y, 0.0001), target.z / maxf(size.z, 0.0001))
+	mi.position = pos
+	mi.rotation.y = yaw
+	mi.set_meta("top", pos.y + target.y)
+	props.add_child(mi)
+	return mi
 
 ## Modell so skalieren, dass es "width" breit ist; steht mit der Unterkante auf pos.y. Meta "top" = Oberkante.
 func _place_model(file: String, node_name: String, pos: Vector3, width: float, yaw: float) -> MeshInstance3D:

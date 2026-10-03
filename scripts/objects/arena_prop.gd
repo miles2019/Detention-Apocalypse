@@ -22,6 +22,15 @@ func _ready() -> void:
 	_pivot = Node3D.new()
 	stage.props.add_child(_pivot)
 	_pivot.position = stage.to3(global_position, 0.0)
+	# Feuerlöscher-Modell aus dem Styloo-Paket (siehe CREDITS.md); ohne Modell greifen die Grundformen darunter
+	var model: MeshInstance3D = ModelLib.instance(ModelLib.STYLOO % "chem_fireextinguisher", "") if kind == "extinguisher" else null
+	if model != null:
+		var msize: Vector3 = model.get_meta("size")
+		var ms := 0.56 / maxf(msize.y, 0.0001)
+		model.scale = Vector3(ms, ms, ms)
+		_pivot.add_child(model)
+		_glow = model.get_surface_override_material(0)
+		return
 	if kind == "extinguisher":
 		var cm := CylinderMesh.new()
 		cm.top_radius = 0.085
