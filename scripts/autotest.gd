@@ -14,6 +14,7 @@ var start_weapon := ""
 var proj_shots := false
 var stress := false
 var endless_arg := false
+var also_arg := ""
 var nav_test := false
 var _nav_phase := 0
 var _nav_tt := 0.0
@@ -31,6 +32,7 @@ var _stuck_log := 0.0
 var _stress_t := 0.0
 var _ft := []
 var _ft_t := 0.0
+var _last_us := 0
 var _proj_cd := 0.0
 var _hub_i := 0
 var _hub_t := 0.0
@@ -89,6 +91,8 @@ func _ready() -> void:
 			stop_wave = int(a.substr(11))
 		elif a == "--navtest":
 			nav_test = true
+		elif a.begins_with("--also="):
+			also_arg = a.substr(7)
 		elif a == "--endless":
 			endless_arg = true
 		elif a.begins_with("--char="):
@@ -118,8 +122,12 @@ func shot(tag: String) -> void:
 
 func _process(delta: float) -> void:
 	if stress:
-		_ft.append(delta / maxf(0.01, Engine.time_scale))
-		_ft_t += delta / maxf(0.01, Engine.time_scale)
+		# echte Framezeit per Uhr messen (delta wird durch Hitstop/Zeitlupe verfälscht)
+		var now_us := Time.get_ticks_usec()
+		var real_dt := float(now_us - _last_us) / 1000000.0 if _last_us > 0 else 0.016
+		_last_us = now_us
+		_ft.append(real_dt)
+		_ft_t += real_dt
 		if _ft_t > 8.0:
 			_ft.sort()
 			var avg := 0.0
@@ -167,6 +175,8 @@ func _process(delta: float) -> void:
 				if start_weapon != "":
 					Save.data.start_weapon = start_weapon
 				main._start_run()
+				for wid in also_arg.split(",", false):
+					Game.player.equip(wid)
 				if god:
 					Game.god_mode = true
 				if event_arg != "":
@@ -192,15 +202,14 @@ func _process(delta: float) -> void:
 				_acted = true
 				shot("levelup")
 				if feat_test and not _feat_done:
-					# Neu würfeln, Merken und Bannen einmal durchspielen
+					# Neu würfeln und Bannen einmal durchspielen
 					_feat_done = true
 					main.levelup._reroll()
-					main.levelup._lock(0)
 					main.levelup._ban(1)
-					print("[AUTOTEST] levelup: rerolls=%d bans=%d locks=%d banned=%s locked=%s" % [Game.lv_rerolls, Game.lv_bans, Game.lv_locks, str(Game.banned), Game.locked_upgrade])
+					print("[AUTOTEST] levelup: rerolls=%d bans=%d banned=%s" % [Game.lv_rerolls, Game.lv_bans, str(Game.banned)])
 					get_tree().create_timer(0.6, true, false, true).timeout.connect(func():
 						shot("levelup_tools")
-						main.levelup._pick(2))
+						main.levelup._pick(0))
 				else:
 					main.levelup._pick(randi() % main.levelup._options.size())
 		S.SHOP:
@@ -274,10 +283,20 @@ func _shop() -> void:
 				get_tree().create_timer(dt * Engine.time_scale / 3.0 + 0.0, true, false, true).timeout.connect(func(): shot("evo"))
 			return
 		Game.add_money(30)
-		for i in 4:
-			if i < main.shop._offers.size() and (not feat_test or i > 0):
+		for i in 5:
+			if i < main.shop._offers.size() and not feat_test:
 				main.shop._buy(i)
 		if feat_test:
+			# Merken: erste Waffe merken, neu würfeln – sie muss im Angebot bleiben
+			var keep_id: String = main.shop._offers[0].id
+			main.shop._toggle_lock(0)
+			main.shop._roll()
+			var still := false
+			for of in main.shop._offers:
+				if of.id == keep_id:
+					still = true
+			print("[AUTOTEST] merken: %s bleibt nach Neu-Würfeln im Angebot: %s, Angebote=%d" % [keep_id, str(still), main.shop._offers.size()])
+			main.shop._build_cards()
 			# Hover-Info prüfen: Maus auf die erste Angebotskarte bewegen
 			var mm := InputEventMouseMotion.new()
 			mm.position = Vector2(180, 250)
@@ -422,6 +441,8 @@ func _play(delta: float) -> void:
 				var id: String = ids[_wp_idx]
 				_wp_idx += 1
 				pl.slots = 20
+				for ow in pl.weapons:
+					ow.free_visuals()
 				pl.weapons.clear()
 				pl.equip(id)
 				print("[AUTOTEST] Waffe ", id)

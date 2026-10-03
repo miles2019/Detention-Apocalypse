@@ -52,6 +52,18 @@ var _nav_t := 0.0
 var _stuck_t := 0.0
 var _side_t := 0.0
 var _side := 1.0
+# Statuseffekte: nass + brennend reagieren zu einer Dampfexplosion
+var wet_t := 0.0
+var burn_t := 0.0
+var burn_dps := 0.0
+var _burn_tick := 0.0
+var _react_cd := 0.0
+var shred := 0                  # gelockerte Schrauben: +8 % erlittener Schaden je Stapel
+var shred_t := 0.0
+var launched_t := 0.0           # fliegt als "Kegelkugel" und trifft andere Gegner
+var _launch_dmg := 0.0
+var _launch_hit := {}
+var _fx_code := 0
 
 static var BossScript: GDScript
 
@@ -197,6 +209,7 @@ func _physics_process(delta: float) -> void:
 			rig.set_tint(base_tint if glue_t <= 0.0 else Color(1.0, 0.55, 0.85))
 	if affix != "":
 		_affix_tick(delta)
+	_status_tick(delta)
 	atk_cd -= delta
 	contact_cd -= delta
 	_bar_t = maxf(0.0, _bar_t - delta)
@@ -543,11 +556,29 @@ func take_hit(dmg: float, dir: Vector2, kb: float, crit: bool, opts: Dictionary 
 		return
 	if slow_t > 0.0 and Game.player != null and Game.player.syn_tier("Kunst") >= 2:
 		dmg *= 1.2
+	if shred > 0:
+		dmg *= 1.0 + 0.08 * float(shred)
+	if opts.get("shred", 0) > 0:
+		shred = mini(5, shred + 1)
+		shred_t = 6.0
+		_bar_t = 3.0
+	if opts.get("launch", 0.0) > 0.0 and data.behavior != "boss":
+		launched_t = 0.5
+		_launch_dmg = opts.launch
+		_launch_hit.clear()
+	var st: String = opts.get("status", "")
+	if st == "":
+		st = Db.weapon_status(str(opts.get("tags", "")))
+	if st != "" and st != "none":
+		apply_status(st)
 	hp -= dmg
 	_bar_t = 3.0
 	Game.stats.damage_dealt += dmg
 	var quiet: bool = opts.get("quiet", false)
-	rig.flash(0.1)
+	# Brand-Ticks: kein Blitz, keine eigenen Schadenszahlen (sonst entstehen bei vielen brennenden Gegnern hunderte Effekte)
+	var silent: bool = str(opts.get("tags", "")) == "burn"
+	if not silent:
+		rig.flash(0.1)
 	if not quiet:
 		var mass := 1.0 + (data.radius - 14.0) * 0.06
 		if data.elite:
@@ -566,7 +597,7 @@ func take_hit(dmg: float, dir: Vector2, kb: float, crit: bool, opts: Dictionary 
 		Juice.shake(0.3, dir)
 		Juice.zoom_pop(0.02)
 		rig.flash(0.14, Color(1, 0.9, 0.4))
-	else:
+	elif not silent:
 		if dmg > 0.0:
 			_dmg_accum += dmg
 		if _dmg_text_t <= 0.0 and _dmg_accum > 0.0:
@@ -689,7 +720,7 @@ func _draw() -> void:
 		_draw_telegraph()
 
 func wants_overlay() -> bool:
-	return not dead and spawn_t <= 0.0 and (data.elite or affix != "" or _bar_t > 0.0 or atk == "windup" or stun_t > 0.0)
+	return not dead and spawn_t <= 0.0 and (data.elite or affix != "" or _bar_t > 0.0 or atk == "windup" or stun_t > 0.0 or shred > 0)
 
 ## Bildschirmebene: Gesundheitsbalken und Warndreieck über dem Kopf
 func draw_overlay(c: Control, sp: Vector2) -> void:
@@ -710,6 +741,11 @@ func draw_overlay(c: Control, sp: Vector2) -> void:
 		c.draw_rect(Rect2(sp.x - w * 0.5 - 1, y - 1, w + 2, 8), Color(0, 0, 0, 0.8))
 		var frac := clampf(hp / max_hp, 0.0, 1.0)
 		c.draw_rect(Rect2(sp.x - w * 0.5, y, w * frac, 6), Db.affixes[affix].color if affix != "" else (Color(1.0, 0.3, 0.25) if data.elite else Color(0.9, 0.2, 0.2)))
+	for i in shred:
+		# gelockerte Schrauben als kleine Keile unter dem Balken
+		var sx := sp.x - 12.0 + i * 6.0
+		var sy := sp.y - h - 5.0
+		c.draw_colored_polygon(PackedVector2Array([Vector2(sx - 2.5, sy), Vector2(sx + 2.5, sy), Vector2(sx, sy + 5.0)]), Color(0.8, 0.85, 1.0))
 	if stun_t > 0.0:
 		var t := Time.get_ticks_msec() * 0.006
 		for i in 3:
@@ -781,3 +817,79 @@ func _affix_tick(delta: float) -> void:
 				if _shield_t <= 0.0:
 					shield = 3
 					Juice.ring(global_position, 50.0, Color(0.75, 0.85, 1.0), 0.3, 4.0)
+
+# ---------------------------------------------------------------- Statuseffekte
+## "wet" (nass) oder "burn" (brennt). Treffen beide aufeinander, verpufft das Wasser als Dampfexplosion.
+func apply_status(st: String) -> void:
+	if dead:
+		return
+	if st == "wet":
+		if burn_t > 0.0:
+			_steam_burst()
+		else:
+			wet_t = 4.0
+	elif st == "burn":
+		if wet_t > 0.0:
+			_steam_burst()
+		else:
+			burn_t = 3.0
+			var pl = Game.player
+			burn_dps = 5.0 * (pl.dmg_mult if pl != null else 1.0)
+
+func _steam_burst() -> void:
+	if _react_cd > 0.0:
+		return
+	_react_cd = 1.2
+	wet_t = 0.0
+	burn_t = 0.0
+	var pos := global_position
+	var pl = Game.player
+	var mult: float = pl.dmg_mult if pl != null else 1.0
+	Game.stats.reactions += 1
+	Juice.ring(pos, 95.0, Color(0.92, 0.96, 1.0), 0.3, 8.0, true)
+	Juice.burst(pos + Vector2(0, -data.height * 0.4), Color(0.95, 0.97, 1.0, 0.95), 12, 230.0, 0.7, 6.0, 360.0, Vector2.UP, 0.0, "circle", 18.0)
+	Juice.float_text_at(pos, data.height + 4, "Dampf!", Color(0.9, 0.96, 1.0), 17, true)
+	Sfx.play("shoot_steam", 1.5, -8.0)
+	Game.arena.stage.pulse_light(pos, Color(0.9, 0.95, 1.0), 1.4, 2.4, 0.2)
+	for e in Game.arena.enemies_near(pos, 110.0):
+		if is_instance_valid(e) and not e.dead and e.global_position.distance_to(pos) < 95.0 + e.data.radius:
+			var d: Vector2 = (e.global_position - pos).normalized()
+			e.take_hit(18.0 * mult, d, 150.0 if e != self else 0.0, false, {tags = "steam_react", status = "none"})
+
+func _status_tick(delta: float) -> void:
+	_react_cd = maxf(0.0, _react_cd - delta)
+	wet_t = maxf(0.0, wet_t - delta)
+	if shred > 0:
+		shred_t -= delta
+		if shred_t <= 0.0:
+			shred = 0
+	if burn_t > 0.0:
+		burn_t -= delta
+		_burn_tick -= delta
+		if _burn_tick <= 0.0:
+			_burn_tick = 0.5
+			take_hit(burn_dps * 0.5, Vector2.ZERO, 0.0, false, {tags = "burn", quiet = true, status = "none"})
+			if dead:
+				return
+	if launched_t > 0.0:
+		launched_t -= delta
+		for o in Game.arena.enemies_near(global_position, 46.0):
+			if o == self or not is_instance_valid(o) or o.dead or _launch_hit.has(o.get_instance_id()):
+				continue
+			if o.global_position.distance_to(global_position) < data.radius + o.data.radius + 6.0:
+				_launch_hit[o.get_instance_id()] = true
+				var dir: Vector2 = kb_vel.normalized() if kb_vel.length() > 10.0 else (o.global_position - global_position).normalized()
+				o.take_hit(_launch_dmg, dir, 300.0, false, {tags = "bowling"})
+				Juice.burst(o.global_position + Vector2(0, -o.data.height * 0.4), Color(1, 1, 0.8), 5, 160.0, 0.3, 3.0, 120.0, dir)
+				Sfx.play("kick", 1.5, -10.0)
+	# Shader-Effekt am Sprite: 1 = brennt, 2 = nass, 3 = gefroren
+	var code := 0
+	if _freeze_t > 0.0:
+		code = 3
+	elif burn_t > 0.0:
+		code = 1
+	elif wet_t > 0.0:
+		code = 2
+	if code != _fx_code:
+		_fx_code = code
+		rig.set_fx(code)

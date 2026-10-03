@@ -12,6 +12,7 @@ var scale2 := Vector2.ONE
 var rot := 0.0
 var tint := Color.WHITE
 var flash := 0.0
+var fx := 0.0             # Status-Effekt im Shader: 1 brennt, 2 nass, 3 gefroren
 var visible := true
 var shadow := true
 var alive := true

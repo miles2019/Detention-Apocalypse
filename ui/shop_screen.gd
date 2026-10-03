@@ -1,12 +1,14 @@
 class_name ShopScreen
 extends Control
-## Pausenkiosk: vier Angebotskarten, Kaufen, Reroll (Radiergummi), Spind-Übersicht.
+## Pausenkiosk: drei Waffen + zwei Items, Kaufen, Reroll (Radiergummi), Merken (Waffe bleibt im Angebot), Spind mit Verkauf.
 
 signal closed
 signal evolution_requested(recipe: Dictionary)
 signal stats_requested
 
-const CARD := Vector2(262, 410)
+const CARD := Vector2(232, 410)
+const WEAPON_OFFERS := 3
+const MAX_LOCKS := 2
 
 var _offers: Array = []
 var _cards: Array = []
@@ -45,8 +47,8 @@ func _ready() -> void:
 	_money.size = Vector2(290, 40)
 	pill.add_child(_money)
 	_row = HBoxContainer.new()
-	_row.add_theme_constant_override("separation", 18)
-	_row.position = Vector2(50, 92)
+	_row.add_theme_constant_override("separation", 12)
+	_row.position = Vector2(36, 92)
 	add_child(_row)
 	# Unterer Bereich: links der Spind (Waffen verkaufen, Items), rechts Akte / Reroll / Weiter
 	var inv_bg := Panel.new()
@@ -116,7 +118,7 @@ func _roll() -> void:
 	var cand: Array = []
 	for id in Db.weapons:
 		var wd: WeaponData = Db.weapons[id]
-		if wd.evolution or not Save.weapon_unlocked(id):
+		if wd.evolution:
 			continue
 		var owned: WeaponRunner = pl.get_weapon(id)
 		if owned != null and owned.level >= wd.max_level:
@@ -137,11 +139,32 @@ func _roll() -> void:
 		if b != null and b.level < 2 and cand.has(r.b):
 			partners.append(r.b)
 	var picks: Array = []
-	if not partners.is_empty():
+	# gemerkte Waffen bleiben im Angebot, bis sie gekauft oder freigegeben werden
+	for id in Game.shop_locks.duplicate():
+		if cand.has(id) and picks.size() < WEAPON_OFFERS:
+			picks.append(id)
+			cand.erase(id)
+		else:
+			Game.shop_locks.erase(id)
+	if not partners.is_empty() and picks.size() < WEAPON_OFFERS:
 		partners.shuffle()
-		picks.append(partners[0])
-		cand.erase(partners[0])
-	while picks.size() < 2 and not cand.is_empty():
+		for pid in partners:
+			if cand.has(pid):
+				picks.append(pid)
+				cand.erase(pid)
+				break
+	# möglichst unterschiedliche Spielweisen anbieten
+	var kinds := {}
+	for id in picks:
+		kinds[Db.weapons[id].kind] = true
+	for id in cand.duplicate():
+		if picks.size() >= WEAPON_OFFERS:
+			break
+		if not kinds.has(Db.weapons[id].kind):
+			kinds[Db.weapons[id].kind] = true
+			picks.append(id)
+			cand.erase(id)
+	while picks.size() < WEAPON_OFFERS and not cand.is_empty():
 		picks.append(cand.pop_front())
 	for id in picks:
 		var wd: WeaponData = Db.weapons[id]
@@ -195,7 +218,7 @@ func _make_card(i: int) -> Control:
 	var o: Dictionary = _offers[i]
 	var card := PanelContainer.new()
 	card.custom_minimum_size = CARD
-	var csb := UIKit.sbox_new("card_cream", 10)
+	var csb := UIKit.sbox_new("card_cream", 10, Color(1.0, 0.95, 0.7) if (o.kind == "weapon" and Game.shop_locks.has(o.id)) else Color.WHITE)
 	csb.content_margin_top = 6.0
 	card.add_theme_stylebox_override("panel", csb)
 	var v := VBoxContainer.new()
@@ -229,19 +252,32 @@ func _make_card(i: int) -> Control:
 	var sj := HBoxContainer.new()
 	sj.add_theme_constant_override("separation", 6)
 	sj.add_child(UIKit.icon(Db.subject_icon(subject), Vector2(26, 26)))
-	sj.add_child(UIKit.label(subject if subject != "" else "Allgemein", 16, Db.subject_color(subject).darkened(0.6)))
+	var sl := UIKit.label(subject if subject != "" else "Allgemein", 14, Db.subject_color(subject).darkened(0.6))
+	sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sj.add_child(sl)
+	if o.kind == "weapon":
+		# Merken: diese Waffe bleibt auch nach dem Neu-Würfeln und im nächsten Kiosk im Angebot
+		var locked: bool = Game.shop_locks.has(o.id)
+		var lb := UIKit.button("Gemerkt" if locked else "Merken", Vector2(84, 28), 11, Color("ffe08a") if locked else Color("a8c8f8"))
+		lb.name = "Lock"
+		lb.pressed.connect(func(): _toggle_lock(i))
+		UIKit.tip(lb, "Merken", "Die Waffe bleibt im Angebot – auch nach dem Neu-Würfeln und im nächsten Kiosk –, bis du sie kaufst oder wieder freigibst.\nHöchstens %d Waffen gleichzeitig." % MAX_LOCKS)
+		sj.add_child(lb)
 	v.add_child(sj)
 	var slot := PanelContainer.new()
 	slot.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 8))
-	slot.custom_minimum_size = Vector2(112, 118)
+	slot.custom_minimum_size = Vector2(100, 104)
 	slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var ic := UIKit.icon(icon_path, Vector2(86, 86))
+	var ic := UIKit.icon(icon_path, Vector2(74, 74))
 	slot.add_child(ic)
 	v.add_child(slot)
-	v.add_child(UIKit.label(name, 22, UIKit.NAVY, HORIZONTAL_ALIGNMENT_CENTER))
-	var d := UIKit.label(desc, 14, UIKit.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	var nl := UIKit.label(name, 18, UIKit.NAVY, HORIZONTAL_ALIGNMENT_CENTER)
+	nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nl.custom_minimum_size = Vector2(206, 0)
+	v.add_child(nl)
+	var d := UIKit.label(desc, 13, UIKit.INK, HORIZONTAL_ALIGNMENT_CENTER)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d.custom_minimum_size = Vector2(236, 66)
+	d.custom_minimum_size = Vector2(206, 66)
 	v.add_child(d)
 	var st := UIKit.label(status, 16, UIKit.GREEN, HORIZONTAL_ALIGNMENT_CENTER)
 	st.name = "Status"
@@ -254,7 +290,7 @@ func _make_card(i: int) -> Control:
 	pl.name = "Price"
 	pr.add_child(pl)
 	v.add_child(pr)
-	var b := UIKit.button("Kaufen", Vector2(200, 50), 24, Color("c8f0b8"))
+	var b := UIKit.button("Kaufen", Vector2(180, 50), 22, Color("c8f0b8"))
 	b.name = "Buy"
 	b.pressed.connect(func(): _buy(i))
 	v.add_child(b)
@@ -314,6 +350,7 @@ func _buy(i: int) -> void:
 	var pl = Game.player
 	if o.kind == "weapon":
 		pl.equip(o.id)
+		Game.shop_locks.erase(o.id)
 	else:
 		pl.add_item(o.id)
 	o.sold = true
@@ -343,6 +380,29 @@ func _buy(i: int) -> void:
 	if not r.is_empty():
 		_busy = true
 		evolution_requested.emit(r)
+
+func _toggle_lock(i: int) -> void:
+	if _busy or i >= _offers.size():
+		return
+	var o: Dictionary = _offers[i]
+	if o.sold or o.kind != "weapon":
+		return
+	if Game.shop_locks.has(o.id):
+		Game.shop_locks.erase(o.id)
+		Sfx.play("click", 0.8)
+	elif Game.shop_locks.size() < MAX_LOCKS:
+		Game.shop_locks.append(o.id)
+		Sfx.play("stamp", 1.4, -6.0)
+	else:
+		_deny(_cards[i])
+		return
+	var locked: bool = Game.shop_locks.has(o.id)
+	var lb: Button = _cards[i].find_child("Lock", true, false)
+	if lb != null:
+		lb.text = "Gemerkt" if locked else "Merken"
+	var csb := UIKit.sbox_new("card_cream", 10, Color(1.0, 0.95, 0.7) if locked else Color.WHITE)
+	csb.content_margin_top = 6.0
+	_cards[i].add_theme_stylebox_override("panel", csb)
 
 func evolution_done() -> void:
 	_busy = false

@@ -67,3 +67,10 @@ Ersetzen: `Sfx.sounds["name"] = load("res://audio/xyz.ogg")`. Audio-Busse: Music
 - **Noch Platzhalter:** Labortische (Kapitel 2), Bibliothek (Regale, Tisch), Tafel, Feuerlöscher, Chemieschrank.
 - **Nicht verwendet:** `interior_walls.fbx` und `walls_lowpoly/` (kommen ohne zugewiesene Texturen an, die bemalten Wände passen besser zum Stil); `bookcase`/`small_bookcase` (43.000–92.000 Dreiecke); `blackboard`, `door`, `clock` (einfarbige Platten ohne Details).
 - Die Original-Archive liegen in `source/` (von Godot und Git ausgenommen).
+
+## Waffen-Ausbau
+- **Kiosk** bietet jetzt alle Waffen an (die Werkbank schaltet nur noch Startwaffen frei): 3 Waffen + 2 Items, möglichst unterschiedliche Spielweisen.
+- **Merken** sitzt an den Waffenkarten im Kiosk (`Game.shop_locks`, höchstens 2), nicht mehr bei der Klassenarbeit.
+- **Neue Waffentypen** (scripts/weapon_runner.gd): `mine` (scripts/trap.gd), `vortex` (scripts/vortex.gd + effects/vortex.gdshader), `boomerang`, `turret` (scripts/turret.gd), `fissure`; Projektil-Parameter `snipe`, `seek`, `explode`/`cloud`, `still`; Nahkampf-Parameter `reflect`, `launch`, `shred`, `sweep`; Kegel-Parameter `paint`.
+- **Statuseffekte** (scripts/enemy.gd, Abschnitt "Statuseffekte"): nass (Waffen-Tag `water`) und brennend (Tag `fire`) reagieren zu einer Dampfexplosion. Darstellung über `effects/batch_sprite.gdshader` (brennt / nass / gefroren).
+- Bot-Flags neu: `--weapons` testet jede Waffe 3,5 s, `--also=id1,id2` rüstet Zusatzwaffen aus. `--stress` misst jetzt echte Framezeit per Uhr.

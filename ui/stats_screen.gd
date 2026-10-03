@@ -183,7 +183,7 @@ func _col_items(pl) -> Control:
 		v.add_child(UIKit.label("Sammle Waffen und Items desselben Fachs.", 13, Color(0.45, 0.4, 0.35)))
 	v.add_child(_head("Dieser Run"))
 	var st: Dictionary = Game.stats
-	v.add_child(UIKit.label("Stufe %d   ·   Welle %d   ·   %d:%02d\n%d besiegt   ·   %d Elite   ·   Kette %d\nNeu würfeln %d   ·   Bannen %d   ·   Merken %d" % [
+	v.add_child(UIKit.label("Stufe %d   ·   Welle %d   ·   %d:%02d\n%d besiegt   ·   %d Elite   ·   Kette %d\nNeu würfeln %d   ·   Bannen %d   ·   Dampf-Reaktionen %d" % [
 		Game.level, maxi(1, Game.wave), int(st.time) / 60, int(st.time) % 60, st.kills, st.elites + st.champions, st.max_chain,
-		Game.lv_rerolls, Game.lv_bans, Game.lv_locks], 13, Color("5a2d0c")))
+		Game.lv_rerolls, Game.lv_bans, st.reactions], 13, Color("5a2d0c")))
 	return v

@@ -119,6 +119,11 @@ func flash(duration: float = 0.12, color: Color = Color.WHITE) -> void:
 func set_tint(c: Color) -> void:
 	sprite.modulate = c
 
+## Status-Shader am Sprite (nur gebatchte Figuren): 0 = keiner, 1 = brennt, 2 = nass, 3 = gefroren
+func set_fx(code: int) -> void:
+	if bb is BatchSprite:
+		bb.fx = float(code)
+
 ## Kurzer Squash/Stretch-Impuls (Skalierung relativ zu 1), federt elastisch zurück
 func squash(sx: float, sy: float, time: float = 0.28) -> void:
 	if _tw:

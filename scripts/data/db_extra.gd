@@ -35,16 +35,57 @@ static func _weapons(db: Node) -> void:
 	db._w("paperclip", "Büroklammer-Schleuder", "Mathe", "bullet", 9, 0.8, 440, 21, Color("c9d2e0"),
 		"Springt auf nahe Gegner über.", 12, {speed = 620.0, proj_icon = W % 21, proj_scale = 0.3, knockback = 90.0, fire_sfx = "shoot_stapler", params = {chain = 2}})
 	db._w("cleaner", "Reinigungsmittel", "Chemie", "cone", 6, 0.45, 160, 22, Color("e8ffff"),
-		"Schäumender Sprühnebel verlangsamt Gegner.", 10, {knockback = 40.0, spread = 42.0, fire_sfx = "shoot_flame", params = {foam = true, slow = 0.5}})
+		"Schäumender Sprühnebel verlangsamt Gegner und macht sie nass.", 10, {knockback = 40.0, spread = 42.0, fire_sfx = "shoot_flame", tags = PackedStringArray(["water"]), params = {foam = true, slow = 0.5}})
 	db._w("projector", "Overhead-Projektor", "Physik", "cone", 16, 1.8, 230, 19, Color("fff3a0"),
-		"Blendet Gegner im Lichtkegel und setzt den Boden in Brand.", 15, {knockback = 120.0, spread = 50.0, fire_sfx = "phase_Physik", params = {blind = 0.9, fire = true}})
+		"Blendet Gegner im Lichtkegel und setzt den Boden in Brand.", 15, {knockback = 120.0, spread = 50.0, fire_sfx = "phase_Physik", tags = PackedStringArray(["fire"]), params = {blind = 0.9, fire = true}})
 	db._w("gum", "Kaugummi-Blaster", "Kunst", "bullet", 5, 0.6, 420, 18, Color("ff7fc0"),
 		"Klebt Gegner fest – nach kurzer Zeit platzen sie.", 12, {speed = 520.0, knockback = 40.0, fire_sfx = "splat", params = {sticky = 1.3}})
 	db._w("calculator", "Taschenrechner", "Mathe", "bullet", 5, 0.28, 400, 25, Color("8fe0a0"),
 		"Jeder Treffer in Folge erhöht den Multiplikator.", 12, {speed = 640.0, spread = 4.0, knockback = 50.0, fire_sfx = "shoot_pea", params = {combo = true}})
 	db._w("soup", "Suppenkelle", "Chemie", "lob", 20, 1.5, 360, 37, Color("ff9a4a"),
 		"Schleudert heiße Mensa-Suppe: Flächenschaden und eine brennende Pfütze.", 13, {knockback = 180.0, fire_sfx = "shoot_chalk", proj_icon = P % 1, params = {puddle = "fire"}})
+	# --- Waffen mit eigener Spielweise (Fallen, Sog, Geschütz, Bumerang, Scharfschütze ...)
+	db._w("banana", "Bananenschale", "Sport", "mine", 18, 1.7, 300, 0, Color("ffe24a"),
+		"Legt Schalen hinter dir ab. Wer ausrutscht, ist betäubt und reißt andere mit um.", 10, {fire_sfx = "splat"})
+	db._w("magnet", "Magnet-Kanone", "Physik", "vortex", 6, 4.4, 380, 2, Color("6aa8ff"),
+		"Erzeugt ein Sogfeld: zieht Gegner und Münzen zusammen und implodiert. Perfekt vor Flächenangriffen.", 15, {fire_sfx = "phase_Physik"})
+	db._w("crossbow", "Bleistift-Armbrust", "Mathe", "bullet", 30, 1.5, 640, 3, Color("ffd24a"),
+		"Scharfschuss durch alle Gegner. Je weiter der Bolzen fliegt, desto mehr Schaden (bis +100 %).", 15,
+		{speed = 1150.0, pierce = 99, knockback = 240.0, proj_icon = P % 10, proj_scale = 0.6, fire_sfx = "shoot_compass", params = {snipe = true}})
+	db._w("keys", "Schlüsselbund", "Hausmeister", "boomerang", 13, 1.3, 300, 4, Color("f2c230"),
+		"Fliegt los und kommt zurück – trifft auf Hin- und Rückweg alles in der Bahn.", 11, {speed = 600.0, knockback = 120.0, fire_sfx = "shoot_compass"})
+	db._w("plane", "Papierflieger-Werfer", "Kunst", "bullet", 8, 0.55, 520, 26, Color("f4f4ff"),
+		"Flieger suchen sich ihr Ziel selbst – auch um Tische herum.", 12,
+		{speed = 400.0, knockback = 70.0, proj_icon = P % 8, proj_scale = 0.5, fire_sfx = "shoot_pea", params = {seek = true}})
+	db._w("spray", "Sprühdose", "Kunst", "cone", 5, 0.5, 150, 20, Color("ff5fa8"),
+		"Sprüht Farbflächen: Gegner darin werden langsam und nehmen Schaden, du läufst darauf 25 % schneller.", 11,
+		{knockback = 40.0, spread = 40.0, fire_sfx = "shoot_flame", params = {paint = true, slow = 0.3}})
+	db._w("bat", "Baseballschläger", "Sport", "melee", 20, 0.95, 108, 36, Color("ffb070"),
+		"Schlägt gegnerische Geschosse zurück. Getroffene Gegner fliegen als Kegelkugel in ihre Mitschüler.", 13,
+		{knockback = 640.0, spread = 120.0, fire_sfx = "kick", params = {reflect = true, launch = true}})
+	db._w("sledge", "Vorschlaghammer", "Hausmeister", "fissure", 28, 2.4, 420, 44, Color("ffc27a"),
+		"Schlag in den Boden: eine Erdspalte läuft nach vorn, betäubt und zertrümmert Tische.", 15, {knockback = 300.0, fire_sfx = "explosion"})
+	db._w("screwdriver", "Schraubenzieher", "Physik", "melee", 7, 0.28, 88, 33, Color("c8d6ff"),
+		"Blitzschnelle Stiche lockern die Schrauben: jeder Treffer +8 % erlittener Schaden (bis 5x).", 11,
+		{knockback = 60.0, spread = 50.0, fire_sfx = "click", params = {shred = true}})
+	db._w("broom", "Besen", "Hausmeister", "melee", 11, 0.9, 138, 39, Color("e8c070"),
+		"Riesiger Bogen: kehrt Gegner weit weg und alle Münzen und Erfahrung im Bogen zu dir.", 10,
+		{knockback = 540.0, spread = 175.0, fire_sfx = "shoot_mop", params = {sweep = true}})
+	db._w("pipe", "Leckes Wasserrohr", "Physik", "turret", 6, 5.0, 380, 29, Color("5ec8ff"),
+		"Stellt ein Geschütz auf, das selbstständig spritzt und Gegner nass macht.", 14, {fire_sfx = "locker", tags = PackedStringArray(["water"])})
+	db._w("sock", "Stinksocken-Mörser", "Chemie", "bullet", 16, 1.6, 440, 11, Color("b8d84a"),
+		"Die Socke platzt beim Aufprall und hinterlässt eine Stinkwolke, die Gegner vergiftet und bremst.", 14,
+		{speed = 430.0, knockback = 160.0, proj_icon = P % 11, proj_scale = 0.6, fire_sfx = "shoot_chalk", params = {explode = 85.0, cloud = true}})
+	db._w("slingshot", "Zwille", "Sport", "bullet", 12, 0.8, 540, 6, Color("ff7a5a"),
+		"Wer stillsteht, zielt besser: bis zu +200 % Schaden, solange du dich nicht bewegst.", 11,
+		{speed = 950.0, knockback = 220.0, proj_icon = P % 6, proj_scale = 0.4, fire_sfx = "shoot_pea", params = {still = true}})
 	# --- Evolutionen
+	db._w("trident", "Dreizack der Tafelaufsicht", "Mathe", "bullet", 30, 1.1, 680, 40, Color("ffd24a"),
+		"EVOLUTION: Drei Scharfschuss-Bolzen auf einmal – jeder durchschlägt den ganzen Raum.", 0,
+		{evolution = true, count = 3, spread = 14.0, speed = 1250.0, pierce = 99, knockback = 260.0, proj_icon = P % 10, proj_scale = 0.65, fire_sfx = "shoot_compass", params = {snipe = true}})
+	db._w("sprinkler", "Sprinkleranlage", "Physik", "turret", 8, 4.0, 380, 30, Color("5ec8ff"),
+		"EVOLUTION: Das Rohr sprüht in alle Richtungen und hält doppelt so lange.", 0,
+		{evolution = true, fire_sfx = "locker", tags = PackedStringArray(["water"]), params = {jets = 6}})
 	db._w("geometry", "Geometrie-Todesstern", "Mathe", "orbit", 11, 0.2, 115, 17, Color("ffd84a"),
 		"EVOLUTION: Rotierende Zirkel schneiden Ringbahnen um Mr. Scrubbs.", 0, {evolution = true, params = {blades = 4}, fire_sfx = "shoot_compass"})
 	db._w("gumsalvo", "Klebrige Salve", "Kunst", "bullet", 6, 0.12, 440, 16, Color("ff7fc0"),
@@ -66,6 +107,8 @@ static func _weapons(db: Node) -> void:
 	db.evolutions.append({"a": "stapler", "b": "paperclip", "result": "staplehail"})
 	db.evolutions.append({"a": "mop", "b": "cleaner", "result": "turbo"})
 	db.evolutions.append({"a": "calculator", "b": "ruler", "result": "compound"})
+	db.evolutions.append({"a": "crossbow", "b": "magnet", "result": "trident"})
+	db.evolutions.append({"a": "pipe", "b": "water", "result": "sprinkler"})
 	# Werkbank-Preise (Fehlstunden-Pässe) für noch nicht freigeschaltete Startwaffen
 	for id in db.weapons:
 		var wd: WeaponData = db.weapons[id]

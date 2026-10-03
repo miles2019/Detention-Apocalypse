@@ -43,6 +43,23 @@ func tex(path: String) -> Texture2D:
 		_tex_cache[path] = load(path)
 	return _tex_cache[path]
 
+var _status_cache := {}
+## Status, den eine Waffe verursacht: "wet" (Wasser), "burn" (Feuer) oder "" – aus den Waffen-Tags abgeleitet
+func weapon_status(id: String) -> String:
+	if _status_cache.has(id):
+		return _status_cache[id]
+	var st := ""
+	if weapons.has(id):
+		var t: PackedStringArray = weapons[id].tags
+		var w := t.has("water")
+		var f := t.has("fire")
+		if w and not f:
+			st = "wet"
+		elif f and not w:
+			st = "burn"
+	_status_cache[id] = st
+	return st
+
 func w_icon(i: int) -> String: return W % i
 func i_icon(i: int) -> String: return I % i
 func p_icon(i: int) -> String: return P % i

@@ -26,6 +26,15 @@ var rehit := 0.0
 var homing := false
 var steer_speed := 400.0
 var grow := 0.0
+var snipe := false          # Schaden wächst mit der Flugstrecke
+var seek := false           # sucht sich selbst ein Ziel
+var explode := 0.0          # Explosionsradius beim Aufprall
+var cloud := false          # hinterlässt eine Stinkwolke
+var boomer := false         # kehrt zum Spieler zurück
+var _origin := Vector2.ZERO
+var _returning := false
+var _seek_t := 0.0
+var _target: Node = null
 var sprite: Sprite2D
 var bb: Billboard3D
 var mesh3: MeshInstance3D
@@ -51,6 +60,7 @@ func _ready() -> void:
 	if team == "enemy":
 		add_to_group("enemy_proj")
 	visible = false     # 2D-Anteil nur Logik; Darstellung als 3D-Proxy
+	_origin = global_position
 	_rot = vel.angle()
 	var stage: Stage3D = Game.arena.stage
 	if tex != null:
@@ -127,6 +137,28 @@ func _physics_process(delta: float) -> void:
 		var want := (tp - global_position)
 		if want.length() > 8.0:
 			vel = vel.lerp(want.normalized() * steer_speed, 1.0 - exp(-3.2 * delta))
+	if seek:
+		_seek_t -= delta
+		if _seek_t <= 0.0:
+			_seek_t = 0.12
+			_target = Game.nearest_enemy(global_position, 320.0, [])
+		if _target != null and is_instance_valid(_target) and not _target.dead:
+			var want2: Vector2 = (_target.global_position + Vector2(0, -_target.data.height * 0.4)) - global_position
+			vel = vel.lerp(want2.normalized() * vel.length(), 1.0 - exp(-7.0 * delta))
+	if boomer and Game.player != null:
+		if not _returning and _age > life * 0.42:
+			_returning = true
+			_hit.clear()
+		if _returning:
+			var back: Vector2 = (Game.player.global_position + Vector2(0, -24)) - global_position
+			if back.length() < 34.0:
+				_dead = true
+				queue_free()
+				return
+			vel = vel.lerp(back.normalized() * steer_speed * 1.25, 1.0 - exp(-9.0 * delta))
+			life = _age + 1.0
+		else:
+			vel *= exp(-1.6 * delta)
 	global_position += vel * delta
 	_trail_t -= delta
 	if kind == "flame" and randf() < 0.25:
@@ -147,7 +179,9 @@ func _physics_process(delta: float) -> void:
 			if kind == "flame":
 				_expire()
 				return
-			if bounce > 0:
+			if boomer:
+				_returning = true
+			elif bounce > 0:
 				bounce -= 1
 				if team == "player":
 					Sfx.play("click", 1.6, -10.0)
@@ -182,7 +216,12 @@ func _check_enemies() -> void:
 			continue
 		if global_position.distance_to(e.global_position + Vector2(0, -e.data.height * 0.4)) < radius + e.data.radius:
 			_hit[id] = (_age + rehit) if rehit > 0.0 else INF_T
+			if explode > 0.0:
+				_explode()
+				return
 			var cm: float = Game.player.combo_mult() if combo else 1.0
+			if snipe:
+				cm *= 1.0 + minf(1.0, global_position.distance_to(_origin) / 520.0)
 			var r: Dictionary = Game.player.roll_damage(damage * cm, crit_bonus)
 			var kb: float = knockback * Game.player.kb_mult * Game.phase_mod("kb")
 			var dir := vel.normalized()
@@ -241,6 +280,29 @@ func _chain_from(src: Node, base: float) -> void:
 		nxt.take_hit(d, (nxt.global_position - from.global_position).normalized(), 60.0, false, {tags = "chain"})
 		from = nxt
 
+## Aufprall-Explosion (Stinksocke): Flächenschaden, optional eine Giftwolke
+func _explode() -> void:
+	if _dead:
+		return
+	var pl = Game.player
+	var r: float = explode * Game.phase_mod("explosion") * (pl.area_mult if pl != null else 1.0)
+	Juice.ring(global_position, r, color, 0.3, 8.0, true)
+	Juice.burst(global_position, color, 16, 260.0, 0.5, 4.0, 360.0, Vector2.UP, 0.0, "circle", 14.0)
+	Juice.shake(0.25)
+	Sfx.play("splat", 0.8, -2.0)
+	Game.arena.stage.pulse_light(global_position, color, 1.6, 2.6, 0.25)
+	for e in Game.arena.enemies_near(global_position, r):
+		if is_instance_valid(e) and not e.dead and e.global_position.distance_to(global_position) < r + e.data.radius:
+			var res: Dictionary = pl.roll_damage(damage, crit_bonus)
+			e.take_hit(res.dmg, (e.global_position - global_position).normalized(), knockback * pl.kb_mult, res.crit, {tags = weapon_id})
+	Sfx.play_hit(false)
+	if cloud:
+		Hazard.spawn(global_position, {kind = "stink", radius = r * 0.95, telegraph = 0.0, duration = 4.0, tick_enemy = damage * 0.3,
+			slow_enemy = 0.7, color = Color(0.72, 0.85, 0.3), pattern = "bubbles", from_enemy = false})
+	Game.arena.blast(global_position, r, true, 1)
+	_dead = true
+	queue_free()
+
 func _check_player() -> void:
 	var pl = Game.player
 	if pl == null or not pl.is_targetable():
@@ -251,6 +313,9 @@ func _check_player() -> void:
 
 func _expire(hit: bool = false) -> void:
 	if _dead:
+		return
+	if explode > 0.0 and team == "player":
+		_explode()
 		return
 	_dead = true
 	if not hit and kind != "flame" and team == "player":

@@ -5,6 +5,7 @@ extends RefCounted
 const KIND_NAMES := {
 	melee = "Nahkampf", slam = "Rundumschlag", flame = "Flammenstrahl", bullet = "Projektil", ring = "Schallwelle",
 	lob = "Wurf (Fläche)", steam = "Dampfwolke", ball = "Prallball", cone = "Sprühkegel", orbit = "Umlaufbahn",
+	mine = "Falle", vortex = "Sogfeld", boomerang = "Bumerang", turret = "Geschütz", fissure = "Erdspalte",
 }
 
 static func set_info(subject: String, count: int = -1) -> String:
@@ -42,6 +43,11 @@ static func weapon(wd: WeaponData, level: int = 1, pl = null, show_next: bool = 
 	if wd.knockback >= 200.0:
 		extra.append("starker Rückstoß")
 	lines.append("   ·   ".join(extra))
+	var st: String = Db.weapon_status(wd.id)
+	if st == "wet":
+		lines.append("Macht Gegner nass. Nass + Feuer = Dampfexplosion.")
+	elif st == "burn":
+		lines.append("Setzt Gegner in Brand. Feuer + nass = Dampfexplosion.")
 	if wd.evolution:
 		lines.append("Evolutionswaffe")
 	else:

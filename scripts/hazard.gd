@@ -23,6 +23,8 @@ var follow_up := {}
 var from_enemy := true
 var sound := ""
 var on_activate := Callable()
+var stun_enemy := 0.0
+var blast_power := -1
 
 var _t := 0.0
 var _active := false
@@ -73,7 +75,7 @@ func _activate() -> void:
 	var mul := 1.0
 	if kind in ["chalk", "impact"] and not from_enemy:
 		mul = Game.phase_mod("explosion")
-	var big := kind in ["slam", "impact", "chalk"]
+	var big := kind in ["slam", "impact", "chalk", "quake"]
 	if big:
 		Game.arena.stage.pulse_light(global_position, color, 1.6, 2.6, 0.3)
 		Juice.ring(global_position, radius * mul, color, 0.35, 8.0, true)
@@ -83,7 +85,7 @@ func _activate() -> void:
 		if kind == "slam":
 			Juice.shake(0.45)
 			Game.arena.room_react(global_position, 1.0)
-		Game.arena.blast(global_position, radius * mul, not from_enemy, 2 if kind == "slam" else 1)
+		Game.arena.blast(global_position, radius * mul, not from_enemy, blast_power if blast_power >= 0 else (2 if kind == "slam" else 1))
 	if burst_player > 0.0 and pl != null:
 		if pl.global_position.distance_to(global_position) < radius + 10.0:
 			var dir: Vector2 = (pl.global_position - global_position).normalized()
@@ -100,7 +102,7 @@ func _activate() -> void:
 			if e.global_position.distance_to(global_position) < r + e.data.radius:
 				var res: Dictionary = Game.player.roll_damage(burst_enemy, 0.0)
 				var dir: Vector2 = (e.global_position - global_position).normalized()
-				e.take_hit(res.dmg, dir, kb * Game.phase_mod("kb"), res.crit, {slow = 0.4 if kind == "chalk" else 0.0, tags = "area"})
+				e.take_hit(res.dmg, dir, kb * Game.phase_mod("kb"), res.crit, {slow = 0.4 if kind == "chalk" else 0.0, stun = stun_enemy, tags = "area"})
 		Sfx.play_hit(false)
 	if not follow_up.is_empty():
 		Hazard.spawn(global_position, follow_up)
@@ -124,6 +126,8 @@ func _apply_zone(delta: float) -> void:
 			return
 		if kind == "heal" and d < radius and do_tick:
 			pl.heal(2.0)
+		if kind == "paint" and d < radius:
+			pl.paint_t = 0.25
 		if d < radius:
 			if slow_player < 1.0:
 				pl.apply_slow(slow_player, 0.3)
@@ -137,7 +141,7 @@ func _apply_zone(delta: float) -> void:
 				if slow_enemy < 1.0:
 					e.apply_slow(slow_enemy, 0.3)
 				if do_tick and tick_enemy > 0.0:
-					e.take_hit(tick_enemy, Vector2.ZERO, 0.0, false, {tags = "puddle", quiet = true})
+					e.take_hit(tick_enemy, Vector2.ZERO, 0.0, false, {tags = "puddle", quiet = true, status = "burn" if kind == "fire" else ""})
 
 func _draw() -> void:
 	var c := color
@@ -169,6 +173,9 @@ func _draw() -> void:
 	if duration <= 0.0:
 		return
 	var fa := clampf(_fade, 0.0, 1.0)
+	if kind == "paint":
+		_draw_paint(fa)
+		return
 	c.a = 0.28 * fa
 	draw_circle(Vector2.ZERO, radius, c)
 	var edge := color
@@ -199,3 +206,28 @@ func _draw() -> void:
 				var b2 := Vector2(x + radius * 0.5, -radius * 0.7)
 				if a2.length() < radius and b2.length() < radius:
 					draw_line(a2, b2, edge, 2.0)
+
+## Farbfläche der Sprühdose: unregelmäßiger Klecks mit dunklem Rand, Glanzlicht und Spritzern (Cel-Look)
+func _draw_paint(fa: float) -> void:
+	var grow := minf(1.0, (_t - telegraph) * 5.0)
+	var pts := PackedVector2Array()
+	var inner := PackedVector2Array()
+	var n := 22
+	for i in n:
+		var a := TAU * i / n
+		var wob := 0.78 + 0.22 * sin(a * 3.0 + _seed * 5.0) + 0.1 * sin(a * 7.0 + _seed * 11.0)
+		var d := Vector2(cos(a), sin(a) * 0.82) * radius * wob * grow
+		pts.append(d)
+		inner.append(d * 0.86)
+	var dark := color.darkened(0.35)
+	dark.a = 0.75 * fa
+	draw_colored_polygon(pts, dark)
+	var main := color
+	main.a = 0.7 * fa
+	draw_colored_polygon(inner, main)
+	var hi := color.lightened(0.5)
+	hi.a = 0.6 * fa
+	draw_arc(Vector2(-radius * 0.2, -radius * 0.2) * grow, radius * 0.3 * grow, PI * 1.05, PI * 1.6, 8, hi, 5.0)
+	for i in 5:
+		var a2 := _seed * 3.0 + i * 1.3
+		draw_circle(Vector2(cos(a2), sin(a2) * 0.82) * radius * (1.0 + 0.12 * i) * grow, 5.0 + (i % 3) * 2.5, main)

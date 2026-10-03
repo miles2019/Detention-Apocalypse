@@ -144,7 +144,7 @@ func _process(_delta: float) -> void:
 		var hh: float = h.height_px * Stage3D.S
 		var ww: float = hh * h.aspect
 		var b: Basis = tilt_basis * Basis(Vector3.BACK, h.rot) * Basis.from_scale(Vector3(ww * h.scale2.x, hh * h.scale2.y, 1.0))
-		_write(_buf_s, n, b, h.pos, h.tint, h.region, h.flash)
+		_write(_buf_s, n, b, h.pos, h.tint, h.region, h.flash, h.fx)
 		n += 1
 		if h.shadow:
 			var op: float = 0.62 * h.tint.a * (1.0 - clampf(h.lift / 90.0, 0.0, 0.65))
@@ -158,7 +158,7 @@ func _process(_delta: float) -> void:
 	if m > 0:
 		RenderingServer.multimesh_set_buffer(_mm_sh.get_rid(), _buf_sh)
 
-func _write(buf: PackedFloat32Array, i: int, b: Basis, o: Vector3, col: Color, region: int, flash: float) -> void:
+func _write(buf: PackedFloat32Array, i: int, b: Basis, o: Vector3, col: Color, region: int, flash: float, fx: float = 0.0) -> void:
 	var k := i * 20
 	buf[k] = b.x.x
 	buf[k + 1] = b.y.x
@@ -178,5 +178,5 @@ func _write(buf: PackedFloat32Array, i: int, b: Basis, o: Vector3, col: Color, r
 	buf[k + 15] = col.a
 	buf[k + 16] = float(region)
 	buf[k + 17] = flash
-	buf[k + 18] = 0.0
+	buf[k + 18] = fx
 	buf[k + 19] = 0.0

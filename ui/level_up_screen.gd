@@ -1,7 +1,7 @@
 class_name LevelUpScreen
 extends Control
 ## Klassenarbeits-Bildschirm (Notizbuch-Look): Zeit steht still, Upgrades zur Auswahl (Taste 1-4 oder Klick).
-## Pro Run begrenzt: Neu würfeln (R), Bannen (Option fliegt für den Run raus) und Merken (Option kommt beim nächsten Mal sicher wieder).
+## Pro Run begrenzt: Neu würfeln (R) und Bannen (Option fliegt für den Run raus). Merken gibt es im Kiosk bei den Waffen.
 
 signal chosen(upgrade_id: String)
 
@@ -35,15 +35,10 @@ func open() -> void:
 	_locked = false
 	var pool := _pool()
 	if Game.player != null and Game.player.hp >= Game.player.max_hp - 0.5:
-		if randf() < 0.7 and Game.locked_upgrade != "heal":
+		if randf() < 0.7:
 			pool.erase("heal")
 	pool.shuffle()
 	_options = []
-	# gemerkte Option erscheint garantiert
-	if Game.locked_upgrade != "" and pool.has(Game.locked_upgrade):
-		_options.append(Game.locked_upgrade)
-		pool.erase(Game.locked_upgrade)
-	Game.locked_upgrade = ""
 	while _options.size() < _count() and not pool.is_empty():
 		_options.append(pool.pop_front())
 	_options.shuffle()
@@ -90,9 +85,9 @@ func _build(animate: bool) -> void:
 	var rr := UIKit.button("Neu würfeln [R]  (%d übrig)" % Game.lv_rerolls, Vector2(330, 46), 17, Color("f4b0d0"))
 	rr.disabled = Game.lv_rerolls <= 0
 	rr.pressed.connect(_reroll)
-	UIKit.tip(rr, "Radiergummi", "Würfelt alle nicht gemerkten Antworten neu aus.\nPro Run begrenzt.")
+	UIKit.tip(rr, "Radiergummi", "Würfelt alle Antworten neu aus.\nPro Run begrenzt.")
 	bottom.add_child(rr)
-	bottom.add_child(UIKit.label("Bannen: %d   ·   Merken: %d" % [Game.lv_bans, Game.lv_locks], 15, Color("5a2d0c")))
+	bottom.add_child(UIKit.label("Bannen: %d übrig" % Game.lv_bans, 15, Color("5a2d0c")))
 	await get_tree().process_frame
 	for i in _cards.size():
 		var c: Control = _cards[i]
@@ -113,8 +108,7 @@ func _make_card(i: int, cw: float) -> Control:
 	var pl = Game.player
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(cw, 412)
-	var marked: bool = Game.locked_upgrade == id
-	var csb := UIKit.sbox_new("card_cream", 12, Color(1.0, 0.95, 0.7) if marked else Color.WHITE)
+	var csb := UIKit.sbox_new("card_cream", 12)
 	csb.content_margin_top = 4.0
 	card.add_theme_stylebox_override("panel", csb)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -158,17 +152,11 @@ func _make_card(i: int, cw: float) -> Control:
 	acts.alignment = BoxContainer.ALIGNMENT_CENTER
 	acts.add_theme_constant_override("separation", 6)
 	cv.add_child(acts)
-	var bw := (cw - 54.0) * 0.5
-	var ban := UIKit.button("Bannen", Vector2(bw, 36), 13, Color("f4b0a8"))
+	var ban := UIKit.button("Bannen", Vector2(cw - 90.0, 36), 13, Color("f4b0a8"))
 	ban.disabled = Game.lv_bans <= 0 or _pool().size() <= _count() + 1
 	ban.pressed.connect(func(): _ban(i))
 	UIKit.tip(ban, "Bannen", "Diese Antwort erscheint in diesem Run nie wieder und wird sofort ersetzt.")
 	acts.add_child(ban)
-	var lock := UIKit.button("Gemerkt" if marked else "Merken", Vector2(bw, 36), 13, Color("ffe08a") if marked else Color("a8c8f8"))
-	lock.disabled = not marked and Game.lv_locks <= 0
-	lock.pressed.connect(func(): _lock(i))
-	UIKit.tip(lock, "Merken", "Diese Antwort erscheint bei der nächsten Klassenarbeit garantiert wieder – nimm jetzt eine andere.")
-	acts.add_child(lock)
 	UIKit.tip(card, u.display_name, Tips.item(u, pl.items.get(id, 0) if pl != null else 0, pl) + ("\n\n" + change if change != "" else ""))
 	card.gui_input.connect(func(ev: InputEvent):
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
@@ -196,11 +184,7 @@ func _reroll() -> void:
 	Sfx.play("erase")
 	var pool := _pool()
 	pool.shuffle()
-	var keep: String = Game.locked_upgrade
 	var out: Array = []
-	if keep != "" and _options.has(keep):
-		out.append(keep)
-		pool.erase(keep)
 	# möglichst andere Antworten als vorher
 	var fresh: Array = pool.filter(func(id): return not _options.has(id))
 	var old: Array = pool.filter(func(id): return _options.has(id))
@@ -216,30 +200,12 @@ func _ban(i: int) -> void:
 	var id: String = _options[i]
 	Game.lv_bans -= 1
 	Game.banned.append(id)
-	if Game.locked_upgrade == id:
-		Game.locked_upgrade = ""
-		Game.lv_locks += 1
 	Sfx.play("denied", 1.2, -4.0)
 	var rep := _replacement(_options)
 	if rep != "":
 		_options[i] = rep
 	else:
 		_options.remove_at(i)
-	_build(false)
-
-func _lock(i: int) -> void:
-	if _locked or i >= _options.size():
-		return
-	var id: String = _options[i]
-	if Game.locked_upgrade == id:
-		Game.locked_upgrade = ""
-		Game.lv_locks += 1
-	elif Game.lv_locks > 0:
-		if Game.locked_upgrade != "":
-			Game.lv_locks += 1
-		Game.locked_upgrade = id
-		Game.lv_locks -= 1
-	Sfx.play("stamp", 1.4, -6.0)
 	_build(false)
 
 func _process(delta: float) -> void:
@@ -269,10 +235,6 @@ func _pick(i: int) -> void:
 		return
 	_locked = true
 	var id: String = _options[i]
-	# die gewählte Antwort muss nicht gemerkt bleiben
-	if Game.locked_upgrade == id:
-		Game.locked_upgrade = ""
-		Game.lv_locks += 1
 	for k in _cards.size():
 		var card: Control = _cards[k]
 		var uk: UpgradeData = Db.upgrades[_options[k]]

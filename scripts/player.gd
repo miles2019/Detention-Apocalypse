@@ -23,6 +23,8 @@ var char_data := {}
 var area_mult := 1.0
 var kb_base := 1.0
 var _kills_music := 0
+var paint_t := 0.0             # steht auf eigener Farbe (Sprühdose): schneller
+var still_t := 0.0             # Zeit ohne Bewegung (Zwille)
 var _kills_heal := 0
 
 var rig: VisualRig
@@ -109,6 +111,15 @@ func _physics_process(delta: float) -> void:
 	dash_t = maxf(0.0, dash_t - delta)
 	dash_cd = maxf(0.0, dash_cd - delta)
 	combo_t = maxf(0.0, combo_t - delta)
+	paint_t = maxf(0.0, paint_t - delta)
+	if velocity.length() < 25.0:
+		var before_still := still_t
+		still_t = minf(2.0, still_t + delta)
+		if before_still < 2.0 and still_t >= 2.0 and _has_param("still"):
+			Juice.ring(global_position, 46.0, Color(1.0, 0.6, 0.4), 0.3, 4.0)
+			Juice.float_text_at(global_position, 90.0, "Ruhige Hand!", Color(1.0, 0.7, 0.5), 15)
+	else:
+		still_t = 0.0
 	if combo_t <= 0.0 and combo_n > 0:
 		combo_n = 0
 	dash_inv = maxf(0.0, dash_inv - delta)
@@ -148,7 +159,13 @@ func _physics_process(delta: float) -> void:
 
 func move_speed() -> float:
 	var s := BASE_SPEED * float(char_data.speed) * (1.0 + speed_bonus + 0.10 * float(syn_tier("Sport")))
-	return s * slow_mult * Game.phase_mod("speed")
+	return s * slow_mult * Game.phase_mod("speed") * (1.25 if paint_t > 0.0 else 1.0)
+
+func _has_param(key: String) -> bool:
+	for w in weapons:
+		if w.data.params.get(key, false):
+			return true
+	return false
 
 func _update_aim() -> void:
 	var stick := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down", 0.3)

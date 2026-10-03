@@ -52,9 +52,8 @@ var chain := 0
 var endless := false
 var lv_rerolls := 2
 var lv_bans := 2
-var lv_locks := 1
+var shop_locks: Array = []        # im Kiosk gemerkte Waffen (bleiben bis zum Kauf im Angebot)
 var banned: Array = []
-var locked_upgrade := ""
 var endless_rank := 0
 var _last_kill_ms := 0
 var settings := {master = 0.8, music = 0.55, sfx = 0.9, voice = 0.9, shake = 1.0, ui_scale = 1.0, reduced_motion = false}
@@ -169,13 +168,12 @@ func reset_run() -> void:
 	endless = false
 	lv_rerolls = 2
 	lv_bans = 2
-	lv_locks = 1
+	shop_locks = []
 	banned = []
-	locked_upgrade = ""
 	endless_rank = 0
 	enemies.clear()
 	stats = {kills = 0, damage_dealt = 0.0, damage_taken = 0.0, objects_used = 0, dodges = 0,
-		max_chain = 0, money_earned = 0, events = 0, flawless = 0, elites = 0, champions = 0, bosses = 0, sold = 0, smashed = 0, revived = false, time = 0.0, crits = 0, synergies = 0, waves = 0}
+		max_chain = 0, money_earned = 0, events = 0, flawless = 0, elites = 0, champions = 0, bosses = 0, sold = 0, smashed = 0, reactions = 0, revived = false, time = 0.0, crits = 0, synergies = 0, waves = 0}
 
 func xp_needed(lv: int = -1) -> int:
 	if lv < 0:

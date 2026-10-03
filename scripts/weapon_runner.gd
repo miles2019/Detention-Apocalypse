@@ -13,7 +13,7 @@ var _blades: Array = []
 var _blade_angle := 0.0
 var _blade_hit := {}
 
-const MELEE_KINDS := ["melee", "slam"]
+const MELEE_KINDS := ["melee", "slam", "fissure"]
 
 func _init(d: WeaponData, p: Node) -> void:
 	data = d
@@ -27,6 +27,8 @@ func dmg() -> float:
 	var m := 1.0
 	if prm("combo", false):
 		m = player.combo_mult()
+	if prm("still", false):
+		m *= 1.0 + minf(2.0, player.still_t)
 	return data.damage * (1.0 + 0.3 * float(level - 1)) * player.dmg_mult * m
 
 func cooldown() -> float:
@@ -66,6 +68,8 @@ func update(delta: float) -> void:
 		timer = 0.2
 		return
 	var dir = player.fire_dir(data.reach)
+	if dir == null and data.kind in ["mine", "turret"]:
+		dir = player.aim_dir
 	if dir == null:
 		timer = 0.05
 		return
@@ -89,6 +93,11 @@ func _fire(dir: Vector2) -> void:
 		"steam": _fire_steam(dir)
 		"ball": _fire_ball(dir)
 		"cone": _fire_cone(dir)
+		"mine": _fire_mine(dir)
+		"vortex": _fire_vortex(dir)
+		"boomerang": _fire_boomerang(dir)
+		"turret": _fire_turret(dir)
+		"fissure": _fire_fissure(dir)
 	first_use = false
 
 # ---------------------------------------------------------------- Nahkampf
@@ -112,7 +121,8 @@ func _fire_melee(dir: Vector2) -> void:
 			e.take_hit(r.dmg, to.normalized(), 0.0, r.crit, {tags = "melee", stun = prm("stun", 0.6)})
 			e.kb_vel += (origin - e.global_position).normalized() * 380.0
 		else:
-			e.take_hit(r.dmg, to.normalized(), data.knockback * player.kb_mult * Game.phase_mod("kb"), r.crit, {tags = "melee"})
+			e.take_hit(r.dmg, to.normalized(), data.knockback * player.kb_mult * Game.phase_mod("kb"), r.crit, {tags = "melee",
+				shred = 1 if prm("shred", false) else 0, launch = r.dmg * 0.6 if prm("launch", false) else 0.0})
 		if prm("combo", false):
 			player.combo_hit()
 		Sfx.play_hit(r.crit)
@@ -120,6 +130,34 @@ func _fire_melee(dir: Vector2) -> void:
 	if hits > 0:
 		Juice.shake(0.16 + 0.03 * minf(hits, 5), dir)
 		Juice.burst(origin + dir * reach * 0.8, Color(1, 1, 0.8), 6, 180.0, 0.3, 3.0, 90.0, dir)
+	if prm("reflect", false):
+		# Baseballschläger: gegnerische Geschosse im Bogen fliegen als eigene zurück
+		for p in player.get_tree().get_nodes_in_group("enemy_proj"):
+			if not is_instance_valid(p) or p._dead:
+				continue
+			var tp: Vector2 = p.global_position - origin
+			if tp.length() < reach + 30.0 and absf(angle_difference(dir.angle(), tp.angle())) < arc * 0.5 + 0.2:
+				p.remove_from_group("enemy_proj")
+				p.team = "player"
+				p.vel = dir * maxf(p.vel.length() * 1.6, 520.0)
+				p.damage = dmg() * 1.5
+				p.life = p._age + 1.6
+				p.weapon_id = data.id
+				p.color = data.color
+				p._hit.clear()
+				Juice.float_text_at(p.global_position, 40.0, "Homerun!", Color(1.0, 0.85, 0.4), 18, true)
+				Juice.ring(p.global_position, 40.0, Color(1, 0.9, 0.5), 0.25, 5.0)
+				Juice.hitstop(0.04)
+				Sfx.play("kick", 1.3)
+				Game.stats.objects_used += 1
+	if prm("sweep", false):
+		# Besen: kehrt alles Aufsammelbare im Bogen zu dir
+		for pk in Game.arena.pickup_layer.get_children():
+			if pk is Pickup:
+				var tk: Vector2 = pk.global_position - origin
+				if tk.length() < reach * 1.7 and absf(angle_difference(dir.angle(), tk.angle())) < arc * 0.5:
+					pk.forced = true
+		Juice.burst(origin + dir * reach * 0.6, Color(0.9, 0.85, 0.7, 0.8), 10, 220.0, 0.5, 4.0, data.spread * 0.5, dir, 0.0, "circle", 4.0)
 
 func _fire_slam() -> void:
 	var origin: Vector2 = player.global_position
@@ -183,6 +221,7 @@ func _fire_bullet(dir: Vector2) -> void:
 			team = "player", damage = dmg(), pierce = prc, bounce = bnc,
 			life = data.reach / data.speed * 1.4, knockback = data.knockback, weapon_id = data.id,
 			color = data.color, chain = prm("chain", 0), sticky = prm("sticky", 0.0), combo = prm("combo", false),
+			snipe = prm("snipe", false), seek = prm("seek", false), explode = prm("explode", 0.0), cloud = prm("cloud", false),
 		}
 		match data.id:
 			"water", "gum", "gumsalvo":
@@ -209,6 +248,13 @@ func _fire_bullet(dir: Vector2) -> void:
 			props.life = 3.2
 			props.spin = 12.0
 		Projectile.create(Juice.fx_parent(), base_pos, v, props)
+	if prm("snipe", false):
+		# Scharfschuss: Leuchtspur durch den Raum, kräftiger Rückstoß
+		ChainFX.spawn(base_pos, base_pos + dir * data.reach, data.color)
+		Juice.shake(0.3, dir)
+		Juice.zoom_pop(0.02)
+		Game.arena.stage.flash_at(base_pos + dir * 16.0, 28.0, Color(1, 1, 0.8), 3.0)
+		player.recoil(dir, 90.0)
 	Juice.burst(base_pos, data.color, 4, 140.0, 0.25, 2.5, 50.0, dir, 0.0, "circle")
 	Game.arena.stage.flash_at(base_pos + dir * 12.0, 28.0, data.color.lightened(0.5), 1.0)
 	if data.cooldown >= 0.45:
@@ -317,6 +363,11 @@ func _fire_cone(dir: Vector2) -> void:
 			color = Color(1.0, 0.5, 0.15), pattern = "bubbles", from_enemy = false})
 	if prm("clean", false):
 		_clean_cone(origin, dir, reach, half)
+	if prm("paint", false):
+		var cols := [Color("ff5fa8"), Color("5fd0ff"), Color("ffd84a"), Color("8be05a"), Color("c78bff")]
+		Hazard.spawn(player.global_position + dir * reach * 0.75, {kind = "paint", radius = 62.0 * player.area_mult * (1.0 + 0.1 * float(level - 1)),
+			telegraph = 0.0, duration = 5.0, tick_enemy = 4.0 * player.dmg_mult * (1.0 + 0.3 * float(level - 1)), slow_enemy = 0.6,
+			color = cols[randi() % cols.size()], pattern = "paint", from_enemy = false})
 
 ## Turbo-Schrubbkanone: entfernt Säure/Klebe im Kegel und verwandelt sie in heilende, rutschige Zonen
 func _clean_cone(origin: Vector2, dir: Vector2, reach: float, half: float) -> void:
@@ -364,3 +415,65 @@ func _update_orbit(delta: float) -> void:
 					Sfx.play_hit(r.crit)
 	if _blades.size() > 0 and randf() < 0.1:
 		Juice.burst(origin + Vector2.from_angle(_blade_angle) * radius, Color(1, 0.9, 0.4), 2, 80.0, 0.25, 2.0)
+
+# ---------------------------------------------------------------- Fallen, Sog, Bumerang, Geschütz, Erdspalte
+func _fire_mine(dir: Vector2) -> void:
+	var traps: Array = player.get_tree().get_nodes_in_group("trap")
+	if traps.size() >= 5 + level:
+		traps[0].queue_free()
+	var pos: Vector2 = Game.arena.clamp_to_arena(player.global_position - dir * 26.0)
+	Trap.spawn(pos, dmg())
+	Juice.burst(pos, data.color, 5, 110.0, 0.3, 3.0)
+
+func _fire_vortex(dir: Vector2) -> void:
+	var target = Game.nearest_enemy(player.global_position, data.reach * 1.1)
+	var pos: Vector2 = player.global_position + dir * minf(data.reach * 0.6, 220.0)
+	if target != null and not player.manual_aim:
+		pos = target.global_position
+	elif player.manual_aim:
+		pos = player.global_position + (player.aim_point - player.global_position).limit_length(data.reach)
+	pos = Game.arena.clamp_to_arena(pos)
+	ChainFX.spawn(_muzzle(dir), pos, data.color)
+	Vortex.spawn(pos, {radius = 150.0 * player.area_mult * (1.0 + 0.08 * float(level - 1)), damage = dmg(), duration = 2.6 + 0.3 * float(level - 1), color = data.color})
+	player.recoil(dir, 50.0)
+	Juice.shake(0.18, dir)
+
+func _fire_boomerang(dir: Vector2) -> void:
+	var n: int = 1 + player.extra_proj + (1 if level >= 3 else 0)
+	var base_pos := _muzzle(dir)
+	for i in n:
+		var off := 0.0
+		if n > 1:
+			off = deg_to_rad(26.0) * (float(i) / float(n - 1) - 0.5) * 2.0
+		Projectile.create(Juice.fx_parent(), base_pos, dir.rotated(off) * data.speed, {
+			team = "player", kind = "ball", damage = dmg(), pierce = 9999, life = 1.5, radius = 16.0, knockback = data.knockback,
+			weapon_id = data.id, color = data.color, tex = Db.tex(data.icon), tex_scale = 0.5, spin = 18.0, boomer = true,
+			steer_speed = data.speed, rehit = 0.6,
+		})
+	Juice.burst(base_pos, data.color, 5, 150.0, 0.25, 2.5, 60.0, dir)
+	player.recoil(dir, 30.0)
+
+func _fire_turret(dir: Vector2) -> void:
+	var jets: int = int(prm("jets", 1))
+	var turrets: Array = player.get_tree().get_nodes_in_group("turret")
+	var cap := 2 if jets <= 1 else 1
+	if turrets.size() >= cap:
+		turrets[0].queue_free()
+	var pos: Vector2 = Game.arena.clamp_to_arena(player.global_position + dir * 46.0)
+	Turret.spawn(pos, {damage = dmg(), life = (9.0 + 2.0 * float(level - 1)) * (2.0 if jets > 1 else 1.0), jets = jets, reach = data.reach,
+		weapon_id = data.id, color = data.color, icon = data.icon})
+	Game.stats.objects_used += 1
+
+func _fire_fissure(dir: Vector2) -> void:
+	var origin: Vector2 = player.global_position
+	var n := 5 + (level - 1)
+	player.lunge(dir, 40.0)
+	player.squash_body(1.35, 0.7)
+	Juice.shake(0.5, dir)
+	Juice.zoom_pop(0.03)
+	Game.arena.room_react(origin, 1.2)
+	for i in n:
+		var p: Vector2 = Game.arena.clamp_to_arena(origin + dir * (60.0 + i * 72.0) + dir.orthogonal() * (14.0 if i % 2 == 0 else -14.0))
+		Game.arena.decal(p, Color(0.08, 0.06, 0.05, 0.6), 24.0 + (i % 2) * 8.0, 5.0)
+		Hazard.spawn(p, {kind = "quake", radius = 56.0 * player.area_mult, telegraph = 0.1 + 0.08 * i, burst_enemy = dmg(), kb = data.knockback,
+			stun_enemy = 0.5, blast_power = 2, color = data.color, pattern = "stripes", from_enemy = false, sound = "kick" if i > 0 else "explosion"})

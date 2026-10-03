@@ -12,6 +12,7 @@ var _pop := 0.0
 var _lift := 0.0
 var _collected := false
 var _swirl := 1.0
+var forced := false
 
 static func spawn(k: String, v: int, pos: Vector2, scatter: float = 90.0) -> void:
 	if Game.arena == null:
@@ -103,7 +104,7 @@ func _physics_process(delta: float) -> void:
 	var pl = Game.player
 	if pl != null and not _collected:
 		var d := global_position.distance_to(pl.global_position + Vector2(0, -14))
-		var attract: bool = d < pl.magnet or Game.arena.collect_all
+		var attract: bool = d < pl.magnet or Game.arena.collect_all or forced
 		if kind == "rare":
 			attract = d < pl.magnet * 0.6 or Game.arena.collect_all
 		if attract and _age > 0.3:
