@@ -60,3 +60,10 @@ Ersetzen: `Sfx.sounds["name"] = load("res://audio/xyz.ogg")`. Audio-Busse: Music
 - **Charaktere** (`Db.characters`): Frau Kelle und Herr Probe nutzen vorerst die eingefärbte Scrubbs-Grafik – **Platzhalter, eigene Sprites fehlen** (assets/chars/). Tobi und Mia sind leere Plätze.
 - **Projektil-Schweife**: scripts/trail_pool.gd (MultiMesh) statt `GPUParticles3D.emit_particle`, das der Compatibility-Renderer nicht unterstützt.
 - Bot-Flags neu: `--feat` (Verkauf, Tooltip, Akte, Würfeln/Bannen/Merken), `--smash`, `--navtest`, `--endless`, `--fast`, `--stopwave=N`, `--char=<id>`.
+
+## 3D-Modelle (assets/models, Lizenzen in CREDITS.md)
+- `scripts/model_lib.gd` lädt Objekte aus den FBX-Paketen und fasst ihre Teil-Meshes zu einem Mesh zusammen.
+- **Im Spiel:** Klassenzimmer (Kapitel 1) nutzt Schülertische, Stühle, Lehrerpult und Heft aus `classroom.fbx`; alle Mülleimer nutzen `trash_can.fbx`.
+- **Noch Platzhalter:** Labortische (Kapitel 2), Bibliothek (Regale, Tisch), Tafel, Feuerlöscher, Chemieschrank.
+- **Nicht verwendet:** `interior_walls.fbx` und `walls_lowpoly/` (kommen ohne zugewiesene Texturen an, die bemalten Wände passen besser zum Stil); `bookcase`/`small_bookcase` (43.000–92.000 Dreiecke); `blackboard`, `door`, `clock` (einfarbige Platten ohne Details).
+- Die Original-Archive liegen in `source/` (von Godot und Git ausgenommen).

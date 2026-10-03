@@ -20,6 +20,19 @@ func _ready() -> void:
 	var stage: Stage3D = Game.arena.stage
 	_pivot = Node3D.new()
 	stage.props.add_child(_pivot)
+	# Mülleimer-Modell (siehe CREDITS.md); ohne Modell bleibt der Zylinder-Platzhalter
+	var model := ModelLib.instance(ModelLib.TRASH, "")
+	if model != null:
+		var msize: Vector3 = model.get_meta("size")
+		var ms := 0.46 / maxf(msize.y, 0.0001)
+		model.scale = Vector3(ms, ms, ms)
+		model.position.y = -0.21
+		_pivot.add_child(model)
+		_mat = model.get_surface_override_material(0)
+		for si in model.mesh.get_surface_count():
+			model.set_surface_override_material(si, _mat)
+		_mat.albedo_color = Color(0.5, 0.55, 0.6)
+		return
 	var cm := CylinderMesh.new()
 	cm.top_radius = 0.19
 	cm.bottom_radius = 0.16

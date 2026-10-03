@@ -271,6 +271,8 @@ func build_props(obstacles: Array, style: String = "classroom") -> void:
 			_build_desk(r, style)
 
 func _build_desk(r: Rect2, style: String = "classroom") -> void:
+	if style == "classroom" and _build_model_desk(r):
+		return
 	var top_y := 0.52
 	var first := props.get_child_count()
 	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
@@ -309,6 +311,67 @@ func _build_desk(r: Rect2, style: String = "classroom") -> void:
 	for i in range(first, props.get_child_count()):
 		nodes.append(props.get_child(i))
 	_desks.append({rect = r2, mats = mats, alpha = 1.0, src = r, nodes = nodes})
+
+## Klassenzimmer-Möbel aus dem Low-Poly-Paket (siehe CREDITS.md): zwei Schülertische mit Stühlen nebeneinander,
+## bei tiefen Hindernissen ein Lehrerpult. Gibt false zurück, wenn die Modelle fehlen (dann greifen die Platzhalter).
+func _build_model_desk(r: Rect2) -> bool:
+	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
+	var c := (r2.position + r2.size * 0.5) * S
+	var w := r2.size.x * S
+	var nodes: Array = []
+	if r.size.y > 70.0:
+		var td := _place_model(ModelLib.CLASSROOM, "Teacher_desk", Vector3(c.x, 0.0, c.y), w * 0.97, 0.0)
+		if td == null:
+			return false
+		nodes.append(td)
+		var top: float = td.get_meta("top")
+		var book := _place_model(ModelLib.CLASSROOM, "libro_quaderno2", Vector3(c.x - w * 0.22, top, c.y + 0.05), 0.38, 0.3)
+		if book != null:
+			nodes.append(book)
+	else:
+		for side in [-1.0, 1.0]:
+			var x: float = c.x + side * w * 0.25
+			var desk := _place_model(ModelLib.CLASSROOM, "student_desk", Vector3(x, 0.0, c.y), w * 0.49, 0.0)
+			if desk == null:
+				return false
+			nodes.append(desk)
+			var chair := _place_model(ModelLib.CLASSROOM, "student_chair", Vector3(x, 0.0, c.y - 0.2), w * 0.21, PI)
+			if chair != null:
+				nodes.append(chair)
+		var top2: float = nodes[0].get_meta("top")
+		var book2 := _place_model(ModelLib.CLASSROOM, "libro_quaderno2", Vector3(c.x - w * 0.25, top2, c.y + 0.04), 0.3, -0.25)
+		if book2 != null:
+			nodes.append(book2)
+	var mats: Array = []
+	for n in nodes:
+		var mi: MeshInstance3D = n
+		for s in mi.mesh.get_surface_count():
+			var mt: StandardMaterial3D = mi.get_surface_override_material(s)
+			if not OS.get_cmdline_user_args().has("--nodesktrans"):
+				mt.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+			mats.append(mt)
+	_desks.append({rect = r2, mats = mats, alpha = 1.0, src = r, nodes = nodes})
+	return true
+
+## Modell so skalieren, dass es "width" breit ist; steht mit der Unterkante auf pos.y. Meta "top" = Oberkante.
+func _place_model(file: String, node_name: String, pos: Vector3, width: float, yaw: float) -> MeshInstance3D:
+	var mi := ModelLib.instance(file, node_name)
+	if mi == null:
+		return null
+	var size: Vector3 = mi.get_meta("size")
+	var s := width / maxf(size.x, 0.0001)
+	mi.scale = Vector3(s, s, s)
+	mi.position = pos
+	mi.rotation.y = yaw
+	mi.set_meta("top", pos.y + size.y * s)
+	# Holztöne des Pakets sind recht dunkel/stumpf – an die warme Palette des Spiels angleichen
+	for si in mi.mesh.get_surface_count():
+		var mt: StandardMaterial3D = mi.get_surface_override_material(si)
+		var col := mt.albedo_color
+		if col.r > col.b * 1.15 and col.s > 0.15 and col.v < 0.9:
+			mt.albedo_color = Color(0.74, 0.5, 0.29).lerp(col, 0.25)
+	props.add_child(mi)
+	return mi
 
 ## Schulhof-Hub: Backsteinfassade, Hecken, Bäume, Basketballkorb, Bänke
 func build_hub() -> void:

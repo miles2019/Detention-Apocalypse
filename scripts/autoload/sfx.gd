@@ -91,12 +91,19 @@ func _gen_music_all() -> void:
 
 func _music_done(out: Dictionary) -> void:
 	_music_tracks.merge(out)
-	_music_thread.wait_to_finish()
-	_music_thread = null
+	if _music_thread != null:
+		_music_thread.wait_to_finish()
+		_music_thread = null
 	if _want_track != "" and _want_track == _current_track:
 		_music.stream = _music_tracks[_want_track]
 		_music.play()
 	_want_track = ""
+
+## Beim Beenden auf den Musik-Thread warten (sonst greift er auf ein bereits freigegebenes Objekt zu)
+func _exit_tree() -> void:
+	if _music_thread != null:
+		_music_thread.wait_to_finish()
+		_music_thread = null
 
 func stop_music() -> void:
 	_current_track = ""

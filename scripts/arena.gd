@@ -147,7 +147,7 @@ func _layout(style: String) -> Array:
 			return [Rect2(300, 300, 44, 250), Rect2(560, 480, 44, 280), Rect2(996, 480, 44, 280), Rect2(1256, 300, 44, 250),
 				Rect2(700, 420, 200, 64)]
 		_:
-			return [Rect2(330, 340, 170, 64), Rect2(1100, 340, 170, 64), Rect2(330, 650, 170, 64), Rect2(1100, 650, 170, 64), Rect2(715, 470, 170, 64)]
+			return [Rect2(330, 340, 170, 64), Rect2(1100, 340, 170, 64), Rect2(330, 650, 170, 64), Rect2(1100, 650, 170, 64), Rect2(705, 455, 190, 88)]
 
 func _build_stations() -> void:
 	for st in HUB_STATIONS:
