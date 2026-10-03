@@ -16,6 +16,8 @@ static func build(db: Node) -> void:
 	_challenges(db)
 	_ags(db)
 	_characters(db)
+	_more_chapters(db)
+	_mutators(db)
 	_sets(db)
 	_affixes(db)
 
@@ -279,3 +281,132 @@ static func endless_wave(n: int) -> Dictionary:
 		groups[id] = int(groups.get(id, 0)) + 1
 		budget -= float(p[1])
 	return {duration = minf(60.0, 30.0 + 2.0 * float(n)), groups = groups}
+
+# ---------------------------------------------------------------- Kapitel 4-9
+static func _more_chapters(db: Node) -> void:
+	# neue Gegner
+	db._en("piggy", "Aufzieh-Sparschwein", 58, 66, 10, ["crab_00.png", "crab_01.png", "crab_02.png", "crab_03.png"], 60, "charge",
+		{radius = 17.0, xp = 5, coin_chance = 1.0, coin_value = 3, material = "metal", faces_right = false,
+		params = {charge_cd = 2.6, windup = 0.6, charge_time = 0.6, charge_speed = 470.0, trigger = 420.0}})
+	db._en("sewer", "Kanalratte", 20, 128, 7, ["ratb_00.png", "ratb_01.png"], 38, "chase",
+		{radius = 12.0, xp = 2, coin_chance = 0.45, material = "fur", faces_right = true})
+	# neue Bosse
+	db._en("chef", "Chefkoch Brutzel", 1300, 60, 15, ["zombie_00.png"], 165, "boss",
+		{radius = 34.0, xp = 110, coin_chance = 1.0, coin_value = 9, material = "meat", faces_right = true, elite = true, tex_alt = E + "zombie_01.png"})
+	db._en("trainer", "Trainer Bizeps", 1300, 70, 16, ["brute_00.png"], 180, "boss",
+		{radius = 36.0, xp = 110, coin_chance = 1.0, coin_value = 9, material = "meat", faces_right = true, elite = true, tex_alt = E + "brute_01.png"})
+	db._en("admin", "Admin Root", 1250, 64, 14, ["nerd_00.png"], 150, "boss",
+		{radius = 30.0, xp = 115, coin_chance = 1.0, coin_value = 9, material = "paper", faces_right = true, elite = true})
+	db._en("klecks", "Frau Klecks", 1300, 66, 15, ["sheep_00.png"], 155, "boss",
+		{radius = 32.0, xp = 115, coin_chance = 1.0, coin_value = 10, material = "cloth", faces_right = false, elite = true})
+	db._en("kabine", "Das Ding aus Kabine 3", 1350, 68, 16, ["crab_01.png"], 175, "boss",
+		{radius = 36.0, xp = 120, coin_chance = 1.0, coin_value = 10, material = "slime", faces_right = false, elite = true})
+	db._en("winkel", "Konrektor Winkel", 1500, 70, 17, ["ruler_mutant.png"], 180, "boss",
+		{radius = 36.0, xp = 140, coin_chance = 1.0, coin_value = 12, material = "paper", faces_right = true, elite = true})
+	db.boss_info = {
+		coach = {patterns = ["balls", "whistle", "charge"], summons = ["football"], phase2 = ""},
+		etz = {patterns = ["flasks", "pool", "charge"], summons = ["chemist"], phase2 = ""},
+		zorn = {patterns = ["files", "rule", "summon", "fireline"], summons = ["nerd", "nerd", "chemist", "bird", "bird"], phase2 = ""},
+		chef = {patterns = ["flasks", "summon", "fireline", "charge"], summons = ["zombie", "piggy", "zombie"],
+			phase2 = "Der Chefkoch dreht die Herdplatten auf Stufe 9. Heute gibt es Hausmeister, medium."},
+		trainer = {patterns = ["charge", "whistle", "slamwave", "balls"], summons = ["football", "brute", "football"],
+			phase2 = "Trainer Bizeps zieht die Trainingsjacke aus. Das Aufwärmen ist vorbei."},
+		admin = {patterns = ["files", "laser", "summon", "rule"], summons = ["nerd", "nerd", "piggy"],
+			phase2 = "Admin Root hat sich selbst alle Rechte gegeben. Der Raum steht unter Strom."},
+		klecks = {patterns = ["flasks", "pool", "clones", "balls"], summons = ["sheep", "sheep", "bird"],
+			phase2 = "Frau Klecks ist mit Ihrer Arbeit unzufrieden und übermalt Sie jetzt großflächig."},
+		kabine = {patterns = ["charge", "geyser", "summon", "pool"], summons = ["sewer", "sewer", "sewer", "frog"],
+			phase2 = "Das Ding aus Kabine 3 hat die Spülung gefunden. Bitte Füße hochnehmen."},
+		winkel = {patterns = ["files", "charge", "rule", "slamwave", "laser", "fireline"], summons = ["nerd", "piggy", "brute"],
+			phase2 = "Konrektor Winkel zückt das zweite Lineal. Ab jetzt wird nach Punktabzug gerechnet."},
+	}
+	db.boss_order = ["coach", "etz", "zorn", "chef", "trainer", "admin", "klecks", "kabine", "winkel"]
+	db.lines["boss_4"] = ["Herr Scrubbs, die Mensa ist kein Ort für Hygiene. Chefkoch Brutzel sieht das genauso und hat bereits den Ofen vorgeheizt."]
+	db.lines["boss_5"] = ["Herr Scrubbs! Trainer Bizeps hat gehört, dass Sie den Hallenboden mit Straßenschuhen betreten haben. Zwanzig Liegestütze. Unter ihm."]
+	db.lines["boss_6"] = ["Herr Scrubbs, Sie haben keine Berechtigung für diesen Raum. Admin Root wird Ihren Zugang jetzt dauerhaft löschen."]
+	db.lines["boss_7"] = ["Herr Scrubbs, Kunst kommt von Können. Frau Klecks findet, Sie können weg."]
+	db.lines["boss_8"] = ["Herr Scrubbs, Kabine 3 ist seit Jahren gesperrt. Aus gutem Grund. Der Grund kommt gerade heraus."]
+	db.lines["boss_9"] = ["Endstation, Herr Scrubbs. Konrektor Winkel persönlich hat das Steuer übernommen. Bitte nicht mit dem Fahrer sprechen. Oder überleben."]
+	var c: Dictionary = db.chapters
+	c[4] = {id = 4, name = "Mensa", sub = "Kantine & Kiosk", style = "cafeteria", boss = "chef", boss_name = "Chefkoch Brutzel", boss_title = "Mensa-Leitung",
+		hp_scale = 2.3, phases = ["Chemie", "Sport", "Physik"], reward = 2.8, mechanic = "cafeteria", mods = {heal = 2.0},
+		rule = "Getränkeautomaten verschießen Dosen, Heil-Drops wirken doppelt.",
+		floor = {a = Color(0.78, 0.74, 0.62), b = Color(0.56, 0.3, 0.26), grout = Color(0.25, 0.2, 0.18, 0.5)},
+		waves = [
+			{duration = 40.0, groups = {zombie = 4, piggy = 4, bird = 10, frog = 4}},
+			{duration = 44.0, groups = {zombie = 5, piggy = 5, rat = 6, locker = 1, nerd = 4}},
+			{duration = 48.0, groups = {zombie = 6, piggy = 6, football = 4, sheep = 6, locker = 2}},
+			{duration = 52.0, groups = {brute = 2, zombie = 6, piggy = 6, chemist = 4, locker = 2}},
+			{duration = 56.0, groups = {brute = 3, zombie = 8, piggy = 8, football = 6, sheep = 8, locker = 3}},
+		], intro = "Die Mensa: Es riecht nach Dienstag. Der Eintopf bewegt sich, der Koch auch."}
+	c[5] = {id = 5, name = "Sporthalle", sub = "Turnhalle", style = "gym", boss = "trainer", boss_name = "Trainer Bizeps", boss_title = "Sport-Referendar",
+		hp_scale = 2.5, phases = ["Sport", "Physik", "Sport", "Chemie"], reward = 3.1, mechanic = "gym", mods = {kb = 1.3},
+		rule = "Wenig Deckung, Medizinbälle rollen durch die Halle, Rückstoß +30 %.",
+		floor = {a = Color(0.72, 0.56, 0.34), b = Color(0.68, 0.52, 0.31), grout = Color(0.4, 0.28, 0.15, 0.35)},
+		waves = [
+			{duration = 40.0, groups = {football = 6, bird = 10, rat = 6}},
+			{duration = 44.0, groups = {football = 8, rat = 8, piggy = 4, locker = 1}},
+			{duration = 48.0, groups = {brute = 1, football = 8, sheep = 8, piggy = 5, locker = 2}},
+			{duration = 52.0, groups = {brute = 2, football = 10, rat = 8, zombie = 4, locker = 2}},
+			{duration = 56.0, groups = {brute = 4, football = 12, piggy = 8, sheep = 8, locker = 3}},
+		], intro = "Die Sporthalle: kaum Deckung, viel Anlauf. Hier wird nicht gegangen, hier wird gestürmt."}
+	c[6] = {id = 6, name = "Computerraum", sub = "Informatik", style = "computer", boss = "admin", boss_name = "Admin Root", boss_title = "Informatiklehrer",
+		hp_scale = 2.7, phases = ["Physik", "Chemie", "Physik", "Sport"], reward = 3.4, mechanic = "computer", mods = {},
+		rule = "Kurzschlüsse setzen Bereiche unter Strom – nasse Gegner bekommen einen Schlag.",
+		floor = {a = Color(0.3, 0.34, 0.46), b = Color(0.26, 0.3, 0.42), grout = Color(0.12, 0.14, 0.22, 0.6)},
+		waves = [
+			{duration = 42.0, groups = {nerd = 10, bird = 8, piggy = 4}},
+			{duration = 46.0, groups = {nerd = 10, chemist = 4, piggy = 5, locker = 2}},
+			{duration = 50.0, groups = {nerd = 12, zombie = 4, football = 5, piggy = 5, locker = 2}},
+			{duration = 54.0, groups = {brute = 2, nerd = 12, chemist = 6, sheep = 8, locker = 3}},
+			{duration = 58.0, groups = {brute = 3, nerd = 14, chemist = 8, piggy = 8, football = 6, locker = 3}},
+		], intro = "Der Computerraum: 30 Rechner, 29 davon abgestürzt. Der dreißigste hat Zähne."}
+	c[7] = {id = 7, name = "Kunstraum", sub = "Atelier", style = "art", boss = "klecks", boss_name = "Frau Klecks", boss_title = "Kunstlehrerin",
+		hp_scale = 2.9, phases = ["Chemie", "Physik", "Sport"], reward = 3.7, mechanic = "art", mods = {},
+		rule = "Farbeimer umstoßen: Farbflächen bremsen Gegner und machen dich schneller.",
+		floor = {a = Color(0.74, 0.72, 0.7), b = Color(0.68, 0.66, 0.66), grout = Color(0.3, 0.3, 0.34, 0.5)},
+		waves = [
+			{duration = 42.0, groups = {sheep = 10, bird = 10, nerd = 4}},
+			{duration = 46.0, groups = {sheep = 10, chemist = 5, piggy = 5, locker = 2}},
+			{duration = 50.0, groups = {sheep = 12, zombie = 5, sewer = 10, locker = 2}},
+			{duration = 54.0, groups = {brute = 2, sheep = 12, chemist = 6, football = 6, locker = 3}},
+			{duration = 58.0, groups = {brute = 3, sheep = 14, chemist = 8, sewer = 12, piggy = 6, locker = 3}},
+		], intro = "Der Kunstraum: Hier ist jeder Fleck Absicht. Auch der, der gerade auf Sie zukriecht."}
+	c[8] = {id = 8, name = "Schultoilette", sub = "Sanitärtrakt", style = "toilet", boss = "kabine", boss_name = "Das Ding aus Kabine 3", boss_title = "Dauergast",
+		hp_scale = 3.1, phases = ["Chemie", "Sport", "Chemie", "Physik"], reward = 4.0, mechanic = "toilet", mods = {},
+		rule = "Becken laufen über: Pfützen bremsen alle und machen Gegner nass.",
+		floor = {a = Color(0.62, 0.72, 0.74), b = Color(0.86, 0.9, 0.9), grout = Color(0.25, 0.32, 0.36, 0.6)},
+		waves = [
+			{duration = 42.0, groups = {sewer = 16, frog = 8, rat = 4}},
+			{duration = 46.0, groups = {sewer = 18, frog = 8, chemist = 4, locker = 2}},
+			{duration = 50.0, groups = {sewer = 20, zombie = 5, piggy = 6, frog = 6, locker = 2}},
+			{duration = 54.0, groups = {brute = 2, sewer = 22, chemist = 6, football = 6, locker = 3}},
+			{duration = 58.0, groups = {brute = 3, sewer = 26, zombie = 8, piggy = 8, frog = 8, locker = 3}},
+		], intro = "Die Schultoilette: Seit 1987 nicht gereinigt. Das ist ab heute Ihr Problem, Herr Hausmeister."}
+	c[9] = {id = 9, name = "Schulbus", sub = "Endstation", style = "bus", boss = "winkel", boss_name = "Konrektor Winkel", boss_title = "Stellvertretender Schulleiter",
+		hp_scale = 3.4, phases = ["Sport", "Physik", "Chemie"], reward = 4.6, mechanic = "bus", mods = {},
+		rule = "Der Bus fährt Kurven: alle rutschen zur Seite. Festhalten gibt es nicht.",
+		floor = {a = Color(0.3, 0.3, 0.33), b = Color(0.27, 0.27, 0.3), grout = Color(0.1, 0.1, 0.12, 0.6)},
+		waves = [
+			{duration = 44.0, groups = {bird = 12, rat = 8, piggy = 6, sewer = 8}},
+			{duration = 48.0, groups = {football = 8, nerd = 8, piggy = 6, zombie = 4, locker = 2}},
+			{duration = 52.0, groups = {brute = 2, sheep = 10, chemist = 6, sewer = 14, locker = 2}},
+			{duration = 56.0, groups = {brute = 3, football = 10, zombie = 8, nerd = 10, piggy = 8, locker = 3}},
+			{duration = 60.0, groups = {brute = 4, football = 12, chemist = 8, sheep = 12, sewer = 16, zombie = 8, locker = 3}},
+		], intro = "Der Schulbus: Linie 13, ohne Halt bis zum Ende. Der Fahrer hat ein Lineal und keine Geduld."}
+	for n in [1, 2, 3]:
+		c[n]["mechanic"] = ""
+		c[n]["mods"] = {}
+		c[n]["rule"] = ["Klassenzimmer mit Tafeln, Mülleimern und Chemieschränken.", "Labortische, viele Chemieschränke – Kettenreaktionen möglich.", "Regal-Labyrinth: enge Gänge, Gegner kommen um die Ecke."][n - 1]
+
+## Mutatoren: freiwillige Erschwernisse am Direktorenschild, jede erhöht die Belohnung
+static func _mutators(db: Node) -> void:
+	db.mutators = {
+		two_slots = {name = "Halber Spind", desc = "Nur zwei Waffenplätze.", reward = 0.4},
+		double_elite = {name = "Elite-Klasse", desc = "Doppelt so viele Elite-Gegner, bis zu sechs gleichzeitig.", reward = 0.3},
+		glass = {name = "Glasknochen", desc = "Du hast nur halb so viele Lebenspunkte.", reward = 0.35},
+		fast = {name = "Koffein für alle", desc = "Alle Gegner sind 25 % schneller.", reward = 0.25},
+		no_heal = {name = "Diät", desc = "Keine Heil-Drops, kein Schulapfel, keine Heilung nach der Welle.", reward = 0.25},
+		expensive = {name = "Inflation", desc = "Der Kiosk ist 50 % teurer.", reward = 0.2},
+		alarm = {name = "Dauer-Durchsage", desc = "In jeder Welle findet ein Schul-Event statt.", reward = 0.15},
+	}

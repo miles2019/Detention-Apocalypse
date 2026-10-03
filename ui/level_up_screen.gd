@@ -27,7 +27,7 @@ func _count() -> int:
 func _pool() -> Array:
 	var pool: Array = []
 	for id in Db.levelup_pool:
-		if not Game.banned.has(id):
+		if not Game.banned.has(id) and not (id == "heal" and Game.mut("no_heal")):
 			pool.append(id)
 	return pool
 

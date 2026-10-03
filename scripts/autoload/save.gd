@@ -38,6 +38,7 @@ func _defaults() -> void:
 		character = "scrubbs",
 		chars_unlocked = ["scrubbs"],
 		endless = false,
+		mutators = [],
 		endless_best = [],      # Bestenliste Endlos: [{wave, kills, time, char}]
 	}
 

@@ -50,6 +50,8 @@ var last_rewards := {}
 var stats := {}
 var chain := 0
 var endless := false
+var mutators: Array = []         # aktive Mutatoren dieses Runs (ids aus Db.mutators)
+var room_mods := {}             # feste Regeln des Raums (Kapitel-Mechanik)
 var lv_rerolls := 2
 var lv_bans := 2
 var shop_locks: Array = []        # im Kiosk gemerkte Waffen (bleiben bis zum Kauf im Angebot)
@@ -244,7 +246,20 @@ func phase_mod(key: String, default: float = 1.0) -> float:
 	var v: float = phase_mods.get(key, default)
 	if event_mods.has(key):
 		v *= event_mods[key]
+	if room_mods.has(key):
+		v *= room_mods[key]
 	return v
+
+func mut(id: String) -> bool:
+	return mutators.has(id)
+
+## Belohnungs-Multiplikator aus den aktiven Mutatoren
+func mutator_bonus() -> float:
+	var b := 0.0
+	for id in mutators:
+		if Db.mutators.has(id):
+			b += float(Db.mutators[id].reward)
+	return b
 
 func chapter_data() -> Dictionary:
 	return Db.chapters[chapter]
@@ -308,10 +323,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Run-Ende: Meta-Belohnungen berechnen, Challenges und Freischaltungen verbuchen, speichern.
 func _award(won: bool) -> void:
-	var diff_mul := 1.0 + 0.3 * float(difficulty)
+	var diff_mul := (1.0 + 0.3 * float(difficulty)) * (1.0 + mutator_bonus())
 	var chap: Dictionary = Db.chapters[chapter]
 	var passes := int((float(stats.waves) * 2.0 + float(stats.kills) / 30.0 + (8.0 * chap.reward if won else 0.0)) * diff_mul)
-	var marken := int(stats.elites + stats.champions / 3 + (3 if won else 0))
+	var marken := int(float(stats.elites + stats.champions / 3 + (3 if won else 0)) * (1.0 + mutator_bonus()))
 	if endless:
 		marken += stats.bosses * 2
 		endless_rank = Save.add_endless_score(wave, stats.kills, stats.time, player.char_data.name if player != null else "?")
@@ -332,7 +347,7 @@ func _award(won: bool) -> void:
 		best.time = minf(best.time, stats.time)
 		Save.data.chapter_clears[str(chapter)] = int(Save.data.chapter_clears.get(str(chapter), 0)) + 1
 		Save.add_stat("chapter%d" % chapter, 1)
-		if chapter < 3 and not Save.chapter_unlocked(chapter + 1):
+		if Db.chapters.has(chapter + 1) and not Save.chapter_unlocked(chapter + 1):
 			Save.unlock_chapter(chapter + 1)
 			unlocks.append("Kapitel %d freigeschaltet: %s" % [chapter + 1, Db.chapters[chapter + 1].name])
 	Save.data.passes += passes

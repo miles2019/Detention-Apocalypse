@@ -31,6 +31,7 @@ const CELL := 64.0
 var _obst: Array = []           # zerstörbare Hindernisse: {rect, shape, hp}
 var props_list: Array = []      # Feuerlöscher / Chemieschränke
 var boss_fight := false
+var mechanic: RoomMechanic
 var boss_name := ""
 var boss_title_txt := ""
 var _boss_wave_done := -1
@@ -62,6 +63,7 @@ var _transition_t := 0.0
 func _ready() -> void:
 	Game.arena = self
 	chapter = Game.chapter_data()
+	Game.room_mods = {} if hub_mode else chapter.get("mods", {})
 	y_sort_enabled = false
 	tint = TintProxy.new()
 	tint.stage = stage
@@ -105,6 +107,10 @@ func _ready() -> void:
 	add_child(announcer)
 	events = EventManager.new()
 	add_child(events)
+	if not hub_mode:
+		mechanic = RoomMechanic.new()
+		mechanic.kind = chapter.get("mechanic", "")
+		add_child(mechanic)
 	_build_floor_sprite()
 
 func _exit_tree() -> void:
@@ -143,6 +149,22 @@ func _layout(style: String) -> Array:
 		"lab":
 			return [Rect2(330, 350, 160, 64), Rect2(720, 350, 160, 64), Rect2(1110, 350, 160, 64),
 				Rect2(330, 650, 160, 64), Rect2(720, 650, 160, 64), Rect2(1110, 650, 160, 64)]
+		"cafeteria":
+			return [Rect2(290, 320, 210, 84), Rect2(1100, 320, 210, 84), Rect2(290, 650, 210, 84), Rect2(1100, 650, 210, 84), Rect2(695, 480, 210, 84)]
+		"gym":
+			return [Rect2(380, 470, 110, 74), Rect2(1110, 470, 110, 74), Rect2(745, 250, 110, 74)]
+		"computer":
+			return [Rect2(250, 330, 200, 78), Rect2(520, 330, 200, 78), Rect2(880, 330, 200, 78), Rect2(1150, 330, 200, 78),
+				Rect2(385, 650, 200, 78), Rect2(1015, 650, 200, 78)]
+		"art":
+			return [Rect2(330, 330, 180, 84), Rect2(1090, 650, 180, 84), Rect2(560, 620, 76, 64), Rect2(980, 330, 76, 64),
+				Rect2(1240, 400, 76, 64), Rect2(300, 720, 76, 64), Rect2(760, 450, 84, 74)]
+		"toilet":
+			return [Rect2(360, 126, 28, 220), Rect2(620, 126, 28, 220), Rect2(960, 126, 28, 220), Rect2(1220, 126, 28, 220),
+				Rect2(420, 770, 220, 66), Rect2(960, 770, 220, 66)]
+		"bus":
+			return [Rect2(170, 190, 150, 74), Rect2(400, 190, 150, 74), Rect2(1050, 190, 150, 74), Rect2(1280, 190, 150, 74),
+				Rect2(170, 800, 150, 74), Rect2(400, 800, 150, 74), Rect2(630, 800, 150, 74), Rect2(860, 800, 150, 74), Rect2(1090, 800, 150, 74), Rect2(1280, 800, 150, 74)]
 		"library":
 			return [Rect2(300, 300, 44, 250), Rect2(560, 480, 44, 280), Rect2(996, 480, 44, 280), Rect2(1256, 300, 44, 250),
 				Rect2(690, 405, 220, 92)]
@@ -169,11 +191,22 @@ func _add_rect_shape(body: StaticBody2D, r: Rect2) -> CollisionShape2D:
 	return cs
 
 func _build_objects() -> void:
-	for pos in [Vector2(520, 880), Vector2(1100, 580)]:
+	var st: String = chapter.style
+	# Mülleimer – in der Sporthalle stattdessen vier Medizinbälle
+	var bin_spots: Array = [Vector2(520, 880), Vector2(1100, 580)]
+	if st == "gym":
+		bin_spots = [Vector2(300, 250), Vector2(1300, 250), Vector2(300, 830), Vector2(1300, 830)]
+	elif st == "toilet" or st == "bus":
+		bin_spots = [Vector2(800, 560)]
+	for pos in bin_spots:
 		var b := TrashBin.new()
+		b.ball = st == "gym"
 		b.position = pos
 		entities.add_child(b)
 		bins.append(b)
+	_build_props_for(st)
+	if not st in ["classroom", "lab", "library", "computer", "art"]:
+		return
 	var b1 := Chalkboard.new()
 	b1.position = Vector2(105, 640)
 	b1.facing = 1.0
@@ -184,9 +217,24 @@ func _build_objects() -> void:
 	b2.facing = -1.0
 	entities.add_child(b2)
 	boards.append(b2)
-	# Feuerlöscher und Chemieschränke je nach Raum
+
+## Auslösbare Objekte je Raum: Feuerlöscher, Chemieschränke, Getränkeautomaten, Farbeimer
+func _build_props_for(style: String) -> void:
 	var spots: Array = []
-	match chapter.style:
+	match style:
+		"cafeteria":
+			spots = [["vending", Vector2(170, 215)], ["vending", Vector2(1430, 215)], ["extinguisher", Vector2(150, 890)], ["cabinet", Vector2(1430, 890)]]
+		"gym":
+			spots = [["extinguisher", Vector2(150, 200)], ["extinguisher", Vector2(1450, 890)]]
+		"computer":
+			spots = [["extinguisher", Vector2(150, 200)], ["extinguisher", Vector2(1450, 200)], ["extinguisher", Vector2(800, 900)]]
+		"art":
+			spots = [["bucket", Vector2(200, 250)], ["bucket", Vector2(1400, 250)], ["bucket", Vector2(700, 860)], ["bucket", Vector2(1380, 860)],
+				["bucket", Vector2(800, 250)], ["extinguisher", Vector2(150, 890)]]
+		"toilet":
+			spots = [["extinguisher", Vector2(150, 890)], ["cabinet", Vector2(1430, 890)]]
+		"bus":
+			spots = [["extinguisher", Vector2(110, 540)], ["extinguisher", Vector2(1490, 540)]]
 		"lab":
 			spots = [["cabinet", Vector2(170, 215)], ["cabinet", Vector2(1430, 215)], ["cabinet", Vector2(800, 905)],
 				["extinguisher", Vector2(150, 890)], ["extinguisher", Vector2(1450, 890)]]
@@ -509,7 +557,7 @@ func _on_wave_cleared() -> void:
 		Save.add_stat("flawless_waves", 1)
 		Juice.float_text_at(player.global_position, 100.0, "Fehlerfrei!", Color(0.6, 1, 0.7), 22, true)
 	var wh := int(Save.bonus("wave_heal"))
-	if wh > 0:
+	if wh > 0 and not Game.mut("no_heal"):
 		player.heal(float(wh))
 	_transition_t = 0.0
 	Game.add_money(6 + 2 * Game.wave)
@@ -559,7 +607,7 @@ func start_boss_intro() -> void:
 	var hp_scale: float = chapter.hp_scale
 	if Game.endless:
 		var round_n := int(Game.wave / 5)
-		boss_id = ["coach", "etz", "zorn"][(round_n - 1) % 3]
+		boss_id = Db.boss_order[(round_n - 1) % Db.boss_order.size()]
 		hp_scale = 1.0 + 0.45 * float(round_n - 1)
 	else:
 		Game.wave += 1

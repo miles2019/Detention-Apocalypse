@@ -148,6 +148,7 @@ func open(won: bool) -> void:
 		"Zeit: %d:%02d   ·   Stufe %d" % [int(st.time) / 60, int(st.time) % 60, Game.level],
 		"Pausengeld: %d   ·   Kritische: %d" % [st.money_earned, st.crits],
 		"Beste Kette: %d   ·   Zertrümmert: %d" % [st.max_chain, st.smashed],
+		("Mutatoren: %d aktiv, Belohnung +%d %%" % [Game.mutators.size(), int(round(Game.mutator_bonus() * 100.0))]) if not Game.mutators.is_empty() else "Keine Mutatoren",
 	]
 	var ly := 254.0
 	for t in lines:

@@ -10,6 +10,7 @@ const WORLD := Vector2(1600, 1020)
 const GSCALE := 1.5
 const CAM_ELEV := 0.95          # Kamerahöhenwinkel (rad, ~54 Grad)
 const PLAY := Rect2(70, 125, 1460, 825)
+const P_TOP := 1.25        # Oberkante des Spielfelds in 3D (PLAY.position.y * S)
 
 var ground: SubViewport
 var sprites: Node3D
@@ -275,6 +276,9 @@ func _build_desk(r: Rect2, style: String = "classroom") -> void:
 		return
 	if style == "lab" and _build_lab_table(r):
 		return
+	if style in ["cafeteria", "gym", "computer", "art", "toilet", "bus"]:
+		_build_room_obstacle(r, style)
+		return
 	if style == "library" and _build_office_desk(r):
 		return
 	var top_y := 0.52
@@ -390,6 +394,89 @@ func _build_office_desk(r: Rect2) -> bool:
 		nodes.append(plant)
 	_register_models(r, r2, nodes, false)
 	return true
+
+## Hindernisse der Kapitel 4-9: Mensatische, Sprungkästen, PC-Tische, Staffeleien/Statue, Kabinenwände/Waschbecken, Bussitze.
+## Modelle aus dem Styloo-Paket, wo vorhanden; sonst einfache Grundformen.
+func _build_room_obstacle(r: Rect2, style: String) -> void:
+	var r2 := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
+	var c := (r2.position + r2.size * 0.5) * S
+	var w := r2.size.x * S
+	var d := r2.size.y * S
+	var first := props.get_child_count()
+	var tall := false
+	match style:
+		"cafeteria":
+			if _place_fit(ModelLib.STYLOO % "cafe_table", Vector3(c.x, 0.0, c.y), Vector3(w * 0.98, 0.5, d * 1.05), 0.0) == null:
+				_box(Vector3(w, 0.5, d), Vector3(c.x, 0.25, c.y), Color(0.45, 0.3, 0.2))
+			for side in [-1.0, 1.0]:
+				_place_model(ModelLib.STYLOO % "cafe_chair", "", Vector3(c.x + side * w * 0.26, 0.0, c.y - d * 0.5 - 0.04), 0.3, 0.0)
+		"gym":
+			# Sprungkasten: gestapelte Holzrahmen mit Lederpolster
+			for k in 3:
+				_box(Vector3(w * (1.0 - 0.07 * k), 0.17, d * (1.0 - 0.1 * k)), Vector3(c.x, 0.085 + k * 0.17, c.y), Color(0.78, 0.6, 0.36) if k % 2 == 0 else Color(0.7, 0.52, 0.3))
+			_box(Vector3(w * 0.84, 0.07, d * 0.78), Vector3(c.x, 0.545, c.y), Color(0.45, 0.2, 0.16))
+		"computer":
+			if _place_fit(ModelLib.STYLOO % "pc_table", Vector3(c.x, 0.0, c.y), Vector3(w * 0.98, 0.5, d * 1.05), 0.0) == null:
+				_box(Vector3(w, 0.5, d), Vector3(c.x, 0.25, c.y), Color(0.9, 0.9, 0.92))
+			for side in [-1.0, 1.0]:
+				var scr := _place_model(ModelLib.STYLOO % "pc_screen", "", Vector3(c.x + side * w * 0.24, 0.5, c.y - d * 0.1), w * 0.36, 0.0)
+				if scr == null:
+					_box(Vector3(w * 0.34, 0.28, 0.04), Vector3(c.x + side * w * 0.24, 0.66, c.y), Color(0.12, 0.14, 0.2))
+		"art":
+			if r.size.x > 150.0:
+				if _place_fit(ModelLib.STYLOO % "art_table", Vector3(c.x, 0.0, c.y), Vector3(w * 0.98, 0.55, d * 1.05), 0.0) == null:
+					_box(Vector3(w, 0.55, d), Vector3(c.x, 0.275, c.y), Color(0.25, 0.25, 0.28))
+			elif r.size.x > 80.0:
+				if _place_model(ModelLib.STYLOO % "art_statue", "", Vector3(c.x, 0.0, c.y), w * 0.95, 0.0) == null:
+					_box(Vector3(w * 0.8, 0.9, d * 0.8), Vector3(c.x, 0.45, c.y), Color(0.9, 0.9, 0.88))
+			else:
+				tall = true
+				if _place_fit(ModelLib.STYLOO % "art_easel", Vector3(c.x, 0.0, c.y), Vector3(w * 0.95, 1.1, d * 1.1), 0.0) == null:
+					_box(Vector3(w * 0.8, 1.1, 0.06), Vector3(c.x, 0.55, c.y), Color(0.95, 0.5, 0.15))
+				# Leinwand mit Farbklecks
+				_box(Vector3(w * 0.7, 0.5, 0.03), Vector3(c.x, 0.72, c.y + 0.06), Color(0.96, 0.95, 0.9))
+				_box(Vector3(w * 0.34, 0.24, 0.035), Vector3(c.x - w * 0.08, 0.75, c.y + 0.063), [Color("ff5fa8"), Color("5fd0ff"), Color("ffd84a"), Color("8be05a")][int(r.position.x) % 4])
+		"toilet":
+			if r.size.x < 60.0:
+				tall = true
+				# Kabinenwand
+				_box(Vector3(w * 1.2, 1.15, d), Vector3(c.x, 0.65, c.y), Color(0.98, 0.93, 0.55))
+				_box(Vector3(w * 1.4, 0.08, d), Vector3(c.x, 1.25, c.y), Color(0.75, 0.7, 0.35))
+				for sz in [-1.0, 1.0]:
+					_box(Vector3(0.05, 0.16, 0.05), Vector3(c.x, 0.08, c.y + sz * d * 0.42), Color(0.5, 0.52, 0.56))
+				_place_model(ModelLib.STYLOO % "wc_basictoilet", "", Vector3(c.x + 1.25, 0.0, P_TOP + 0.5), 0.36, 0.0)
+			else:
+				_box(Vector3(w, 0.42, d * 0.9), Vector3(c.x, 0.21, c.y), Color(0.86, 0.9, 0.92))
+				if _place_fit(ModelLib.STYLOO % "wc_sink", Vector3(c.x, 0.42, c.y), Vector3(w * 1.02, 0.12, d), 0.0) == null:
+					_box(Vector3(w * 1.02, 0.08, d), Vector3(c.x, 0.46, c.y), Color(1, 1, 1))
+				# Spiegel
+				_box(Vector3(w * 0.9, 0.5, 0.03), Vector3(c.x, 0.95, c.y - d * 0.5), Color(0.7, 0.88, 0.95))
+		"bus":
+			# Sitzbank mit Lehne
+			var up := r.position.y < 500.0
+			_box(Vector3(w, 0.3, d * 0.85), Vector3(c.x, 0.15, c.y), Color(0.24, 0.42, 0.6))
+			_box(Vector3(w, 0.5, 0.1), Vector3(c.x, 0.55, c.y + (-d * 0.4 if up else d * 0.4)), Color(0.2, 0.36, 0.54))
+			_box(Vector3(w * 0.96, 0.05, d * 0.7), Vector3(c.x, 0.32, c.y), Color(0.3, 0.5, 0.7))
+	var nodes: Array = []
+	var mats: Array = []
+	for i in range(first, props.get_child_count()):
+		var mi: MeshInstance3D = props.get_child(i)
+		nodes.append(mi)
+		var found := false
+		for s in mi.mesh.get_surface_count():
+			var sm: Material = mi.get_surface_override_material(s)
+			if sm is StandardMaterial3D:
+				sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+				mats.append(sm)
+				found = true
+		if not found and mi.material_override is StandardMaterial3D:
+			# Grundformen: eigenes Material, nicht mit der Phasen-Tönung der Wände koppeln
+			mi.material_override.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+			mats.append(mi.material_override)
+	var entry := {rect = r2 if not tall else Rect2(r.position, r.size), mats = mats, alpha = 1.0, src = r, nodes = nodes}
+	if tall:
+		entry["tall"] = true
+	_desks.append(entry)
 
 ## Modell-Knoten als Hindernis-Optik anmelden (Ausblenden hinter dem Spieler, Zertrümmern)
 func _register_models(src: Rect2, rect: Rect2, nodes: Array, tall: bool) -> void:

@@ -77,3 +77,11 @@ Ersetzen: `Sfx.sounds["name"] = load("res://audio/xyz.ogg")`. Audio-Busse: Music
 - **Styloo-Paket** (assets/models/styloo): Labortische mit Kolben/Globus (Kapitel 2), Schreibtisch des Rektors mit Pflanze (Kapitel 3), Feuerlöscher (alle Kapitel). Bewusst nicht verwendet: Regal und Schrank (aus der Spielperspektive nur braune Kisten – die eigenen Regale mit Buchrücken und der Chemieschrank mit Kolben sind besser lesbar), Wandmodule.
 - **Bodentexturen** (assets/textures): Kacheln im Labor, Holz in der Bibliothek, Gras im Schulhof. Sie werden in `Db._ready` vorab geladen, weil der Boden nur einmal gezeichnet wird.
 - `tools/preview_models.gd`: rendert alle .glb eines Ordners als Übersichtsbild.
+
+## Kapitel 4-9 und Mutatoren
+- **Daten:** `DbExtra._more_chapters` (Kapitel, Wellen, Raumregel `mechanic`/`mods`/`rule`, neue Gegner `piggy` und `sewer`, sechs Bosse, `Db.boss_info` mit Mustern/Verstärkung/Phase-2-Text).
+- **Raum-Mechanik:** scripts/room_mechanic.gd (Kurzschlüsse, überlaufende Becken, Kurvenfahrt). Mensa, Sporthalle und Kunstraum über Objekte: Getränkeautomat und Farbeimer (scripts/objects/arena_prop.gd), Medizinbälle (`TrashBin.ball`).
+- **Optik:** Hindernisse in `Stage3D._build_room_obstacle`, Wände in `WallArt._themed`, Böden in scripts/floor_painter.gd. Sprungkästen, Kabinenwände und Bussitze sind **Platzhalter aus Grundformen**.
+- **Bosse** nutzen vorhandene Gegner-Grafiken in groß (Zombie, Rowdy, Streber, Woll-Mutant, Schwein) – **eigene Boss-Sprites fehlen**; nur Konrektor Winkel (ruler_mutant.png) hat eine eigene Grafik.
+- **Mutatoren:** `Db.mutators`, Auswahl am Direktorenschild (`Save.data.mutators`), im Run über `Game.mut(id)`.
+- Bot-Flags neu: `--chapter=4..9`, `--mut=id1,id2`.

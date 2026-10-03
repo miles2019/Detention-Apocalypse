@@ -172,12 +172,12 @@ func _roll() -> void:
 		var price := wd.price + (Game.wave - 1)
 		if owned != null:
 			price = wd.price + owned.level * 4
-		price = maxi(1, int(round(float(price) * (1.0 - Save.bonus("discount")))))
+		price = maxi(1, int(round(float(price) * (1.0 - Save.bonus("discount")) * (1.5 if Game.mut("expensive") else 1.0))))
 		_offers.append({kind = "weapon", id = id, price = price, sold = false})
 	var items: Array = []
 	for id in Db.upgrades:
 		var u: UpgradeData = Db.upgrades[id]
-		if u.shop and pl.items.get(id, 0) < 3:
+		if u.shop and pl.items.get(id, 0) < 3 and not (id == "heal" and Game.mut("no_heal")):
 			items.append(id)
 	items.shuffle()
 	for k in 2:
@@ -185,7 +185,7 @@ func _roll() -> void:
 			break
 		var id: String = items.pop_front()
 		var u: UpgradeData = Db.upgrades[id]
-		_offers.append({kind = "item", id = id, price = maxi(1, int(round(float(u.price + int(Game.wave / 2)) * (1.0 - Save.bonus("discount"))))), sold = false})
+		_offers.append({kind = "item", id = id, price = maxi(1, int(round(float(u.price + int(Game.wave / 2)) * (1.0 - Save.bonus("discount")) * (1.5 if Game.mut("expensive") else 1.0)))), sold = false})
 
 func _build_cards() -> void:
 	for c in _row.get_children():

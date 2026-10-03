@@ -76,11 +76,15 @@ func _spawn(id: String) -> void:
 	var d: EnemyData = Db.enemies[id]
 	if _wave_n >= 2 and not d.elite and id != "locker":
 		var chance := minf(0.2, 0.035 + 0.018 * float(_wave_n) + 0.03 * float(Game.difficulty))
+		var cap := 3
+		if Game.mut("double_elite"):
+			chance *= 2.0
+			cap = 6
 		var champs := 0
 		for e in Game.enemies:
 			if is_instance_valid(e) and e.affix != "":
 				champs += 1
-		if champs < 3 and randf() < chance:
+		if champs < cap and randf() < chance:
 			var keys: Array = Db.affixes.keys()
 			affix = keys[randi() % keys.size()]
 	Game.arena.spawn_with_marker(id, pos, hp_mult, func(): _pending -= 1, affix)

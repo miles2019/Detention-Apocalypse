@@ -87,6 +87,11 @@ func _ready() -> void:
 	crit += Save.bonus("crit")
 	magnet += Save.bonus("magnet")
 	slots += int(Save.bonus("slots"))
+	# Mutatoren
+	if Game.mut("two_slots"):
+		slots = 2
+	if Game.mut("glass"):
+		max_hp = maxf(20.0, round(max_hp * 0.5))
 	var start: String = Save.data.start_weapon
 	if String(char_data.start_weapon) != "":
 		start = char_data.start_weapon

@@ -8,6 +8,10 @@ var kind := "back"
 var style := "classroom"
 var size := Vector2(1600, 210)
 
+# Wandfarben der Kapitel 4-9
+const THEMES := {"cafeteria": Color(0.92, 0.8, 0.6), "gym": Color(0.8, 0.84, 0.88), "computer": Color(0.42, 0.46, 0.6),
+	"art": Color(0.94, 0.92, 0.88), "toilet": Color(0.8, 0.9, 0.92), "bus": Color(0.95, 0.76, 0.2)}
+
 func _draw() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7 if kind == "back" else 11
@@ -18,6 +22,8 @@ func _draw() -> void:
 		base = Color(0.78, 0.45, 0.34)
 	if style == "lab":
 		base = Color(0.82, 0.9, 0.86)
+	elif THEMES.has(style):
+		base = THEMES[style]
 	elif style == "library":
 		base = Color(0.5, 0.36, 0.28)
 	draw_rect(Rect2(0, 0, w, h), base)
@@ -35,6 +41,8 @@ func _draw() -> void:
 		_lab(rng)
 	elif style == "library":
 		_library(rng)
+	elif THEMES.has(style):
+		_themed(rng)
 	elif kind == "back":
 		_back(rng)
 	else:
@@ -242,3 +250,100 @@ func _library(rng: RandomNumberGenerator) -> void:
 		draw_rect(Rect2(1058, 48, 104, 74), Color(0.35, 0.5, 0.35))
 
 # ---------------- Rest
+
+## Wände der Kapitel 4-9: wenige, klar lesbare Motive je Raum
+func _themed(rng: RandomNumberGenerator) -> void:
+	var w := size.x
+	var h := size.y
+	var f := ThemeDB.fallback_font
+	match style:
+		"cafeteria":
+			# Essensausgabe mit Speiseplan
+			var n := 3 if kind == "back" else 2
+			for c in n:
+				var x := 120.0 + c * (w - 240.0) / float(maxi(1, n - 1)) - 110.0 if n > 1 else 100.0
+				draw_rect(Rect2(x, 46, 220, 96), Color(0.3, 0.22, 0.16))
+				draw_rect(Rect2(x + 8, 54, 204, 80), Color(0.16, 0.14, 0.16))
+				for k in 4:
+					draw_rect(Rect2(x + 18 + k * 50, 104, 34, 22), [Color(0.9, 0.5, 0.2), Color(0.5, 0.75, 0.3), Color(0.85, 0.3, 0.3), Color(0.95, 0.85, 0.5)][k])
+				draw_rect(Rect2(x, 142, 220, 8), Color(0.75, 0.76, 0.8))
+			if kind == "back":
+				draw_rect(Rect2(700, 30, 200, 64), Color(0.14, 0.3, 0.22))
+				draw_string(f, Vector2(716, 56), "HEUTE:", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.95, 0.95, 0.85))
+				draw_string(f, Vector2(716, 82), "EINTOPF (LEBT)", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.85, 0.4))
+		"gym":
+			# Sprossenwände und Basketballkorb
+			var bars := 5 if kind == "back" else 3
+			for c in bars:
+				var x2 := 70.0 + c * (w - 140.0) / float(bars) + 20.0
+				draw_rect(Rect2(x2, 30, 110, 118), Color(0.62, 0.42, 0.22))
+				for k in 9:
+					draw_line(Vector2(x2 + 6, 38 + k * 12.5), Vector2(x2 + 104, 38 + k * 12.5), Color(0.86, 0.68, 0.4), 4.0)
+			if kind == "back":
+				draw_rect(Rect2(750, 34, 100, 70), Color(0.96, 0.96, 0.96))
+				draw_rect(Rect2(778, 60, 44, 32), Color(0.9, 0.3, 0.2), false, 4.0)
+				draw_arc(Vector2(800, 112), 20.0, 0, PI, 12, Color(0.95, 0.45, 0.15), 5.0)
+		"computer":
+			# Server-Schränke, Kabel, Poster
+			var racks := 6 if kind == "back" else 3
+			for c in racks:
+				var x3 := 50.0 + c * (w - 100.0) / float(racks)
+				draw_rect(Rect2(x3, 36, 120, 112), Color(0.14, 0.16, 0.22))
+				for k in 7:
+					draw_rect(Rect2(x3 + 8, 44 + k * 14, 104, 9), Color(0.22, 0.25, 0.34))
+					draw_circle(Vector2(x3 + 16 + rng.randi_range(0, 6) * 14, 48.5 + k * 14), 2.6, [Color(0.3, 1.0, 0.4), Color(1.0, 0.3, 0.3), Color(1.0, 0.85, 0.3)][rng.randi() % 3])
+			for i in 5:
+				var a := Vector2(rng.randf_range(0, w), 22)
+				draw_polyline(PackedVector2Array([a, a + Vector2(rng.randf_range(-40, 40), 60), a + Vector2(rng.randf_range(-70, 70), h * 0.7)]), Color(0.1, 0.1, 0.14), 4.0)
+			if kind == "back":
+				draw_rect(Rect2(690, 44, 220, 54), Color(0.05, 0.1, 0.3))
+				draw_string(f, Vector2(704, 78), "FATAL ERROR 0xF", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.9, 0.95, 1.0))
+		"art":
+			# Bilderrahmen und Farbspritzer
+			var cols := [Color("ff5fa8"), Color("5fd0ff"), Color("ffd84a"), Color("8be05a"), Color("c78bff"), Color("ff8a4a")]
+			var frames := 8 if kind == "back" else 4
+			for c in frames:
+				var x4 := 50.0 + c * (w - 100.0) / float(frames)
+				var fw := rng.randf_range(80, 130)
+				var fh := rng.randf_range(60, 96)
+				var fy := rng.randf_range(34, 50)
+				draw_rect(Rect2(x4, fy, fw, fh), Color(0.5, 0.34, 0.16))
+				draw_rect(Rect2(x4 + 7, fy + 7, fw - 14, fh - 14), cols[rng.randi() % cols.size()].lightened(0.4))
+				draw_circle(Vector2(x4 + fw * rng.randf_range(0.3, 0.7), fy + fh * rng.randf_range(0.35, 0.65)), fh * 0.22, cols[rng.randi() % cols.size()])
+			for i in 30:
+				draw_circle(Vector2(rng.randf_range(0, w), rng.randf_range(24, h)), rng.randf_range(3, 12), cols[rng.randi() % cols.size()])
+		"toilet":
+			# Kacheln, Spiegel, Kritzeleien
+			var gx := 0.0
+			while gx < w:
+				draw_line(Vector2(gx, 22), Vector2(gx, h), Color(0.55, 0.7, 0.74, 0.7), 2.0)
+				gx += 34.0
+			var gy := 22.0
+			while gy < h:
+				draw_line(Vector2(0, gy), Vector2(w, gy), Color(0.55, 0.7, 0.74, 0.7), 2.0)
+				gy += 34.0
+			if kind == "back":
+				for c in 5:
+					var dx := 100.0 + c * 300.0
+					draw_rect(Rect2(dx, 60, 150, 150), Color(0.98, 0.93, 0.55))
+					draw_rect(Rect2(dx + 8, 68, 134, 142), Color(0.9, 0.84, 0.45))
+					draw_circle(Vector2(dx + 122, 140), 6.0, Color(0.5, 0.5, 0.55))
+					draw_string(f, Vector2(dx + 50, 110), str(c + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(0.4, 0.3, 0.1))
+				draw_string(f, Vector2(410, 50), "KABINE 3: NICHT ÖFFNEN!!", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.8, 0.15, 0.15))
+			else:
+				for c in 3:
+					draw_rect(Rect2(90.0 + c * 250.0, 40, 130, 80), Color(0.72, 0.9, 0.96))
+					draw_rect(Rect2(90.0 + c * 250.0, 40, 130, 80), Color(0.5, 0.55, 0.6), false, 4.0)
+		"bus":
+			# Fensterreihe mit vorbeiziehender Landschaft
+			var wins := 9 if kind == "back" else 5
+			for c in wins:
+				var x5 := 30.0 + c * (w - 60.0) / float(wins)
+				var ww := (w - 60.0) / float(wins) - 22.0
+				draw_rect(Rect2(x5, 34, ww, 96), Color(0.15, 0.15, 0.18))
+				draw_rect(Rect2(x5 + 6, 40, ww - 12, 84), Color(0.55, 0.8, 0.95))
+				draw_rect(Rect2(x5 + 6, 96, ww - 12, 28), Color(0.4, 0.62, 0.35))
+				draw_line(Vector2(x5 + 6, 68), Vector2(x5 + ww - 6, 60), Color(1, 1, 1, 0.5), 3.0)
+			draw_rect(Rect2(0, h * 0.72, w, 8), Color(0.12, 0.12, 0.14))
+			if kind == "back":
+				draw_string(f, Vector2(690, 30), "LINIE 13 - ENDSTATION", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.15, 0.1, 0.05))

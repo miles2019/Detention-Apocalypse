@@ -15,6 +15,7 @@ var proj_shots := false
 var stress := false
 var endless_arg := false
 var also_arg := ""
+var mut_arg := ""
 var nav_test := false
 var _nav_phase := 0
 var _nav_tt := 0.0
@@ -91,6 +92,8 @@ func _ready() -> void:
 			stop_wave = int(a.substr(11))
 		elif a == "--navtest":
 			nav_test = true
+		elif a.begins_with("--mut="):
+			mut_arg = a.substr(6)
 		elif a.begins_with("--also="):
 			also_arg = a.substr(7)
 		elif a == "--endless":
@@ -168,6 +171,7 @@ func _process(delta: float) -> void:
 				shot("charselect")
 				Game.chapter = chapter_arg
 				Game.endless = endless_arg
+				Game.mutators = Array(mut_arg.split(",", false))
 				if char_arg != "":
 					if not Save.data.chars_unlocked.has(char_arg):
 						Save.data.chars_unlocked.append(char_arg)
@@ -175,6 +179,8 @@ func _process(delta: float) -> void:
 				if start_weapon != "":
 					Save.data.start_weapon = start_weapon
 				main._start_run()
+				if mut_arg != "":
+					print("[AUTOTEST] mutatoren=%s leben=%d plaetze=%d bonus=+%d%%" % [str(Game.mutators), int(Game.player.max_hp), Game.player.slots, int(Game.mutator_bonus() * 100.0)])
 				for wid in also_arg.split(",", false):
 					Game.player.equip(wid)
 				if god:

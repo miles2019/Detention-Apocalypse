@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bd1hqynmmvyn7"
-path="res://.godot/imported/class_locker_ImphenziaPalette01-256-Gradient.png-71fc62b4cb20134e3dbca497a90f5cc8.ctex"
+uid="uid://djqppx60sxg76"
+path="res://.godot/imported/wc_basictoilet_ImphenziaPalette01-256-Gradient.png-64924e8c076d25ed1827ea66a6c2c82c.ctex"
 metadata={
 "vram_texture": false
 }
@@ -13,8 +13,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/models/styloo/class_locker_ImphenziaPalette01-256-Gradient.png"
-dest_files=["res://.godot/imported/class_locker_ImphenziaPalette01-256-Gradient.png-71fc62b4cb20134e3dbca497a90f5cc8.ctex"]
+source_file="res://assets/models/styloo/wc_basictoilet_ImphenziaPalette01-256-Gradient.png"
+dest_files=["res://.godot/imported/wc_basictoilet_ImphenziaPalette01-256-Gradient.png-64924e8c076d25ed1827ea66a6c2c82c.ctex"]
 
 [params]
 

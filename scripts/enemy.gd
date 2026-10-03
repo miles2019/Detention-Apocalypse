@@ -132,7 +132,7 @@ func p(key: String, default = 0.0):
 	return data.params.get(key, default)
 
 func spd() -> float:
-	return data.speed * slow_mult * speed_boost * Game.phase_mod("speed") * (1.2 if is_mini else 1.0)
+	return data.speed * slow_mult * speed_boost * Game.phase_mod("speed") * (1.2 if is_mini else 1.0) * (1.25 if Game.mut("fast") else 1.0)
 
 func is_attacking() -> bool:
 	return atk == "windup" or atk == "act"
@@ -828,6 +828,18 @@ func apply_status(st: String) -> void:
 			_steam_burst()
 		else:
 			wet_t = 4.0
+	elif st == "shock":
+		# Stromschlag: nur nasse Gegner bekommen ihn richtig ab
+		if wet_t > 0.0 and _react_cd <= 0.0:
+			_react_cd = 1.0
+			wet_t = 0.0
+			var pl2 = Game.player
+			Game.stats.reactions += 1
+			Juice.float_text_at(global_position, data.height + 4, "Kurzschluss!", Color(1.0, 0.95, 0.4), 17, true)
+			Juice.burst(global_position + Vector2(0, -data.height * 0.4), Color(1.0, 0.95, 0.4), 10, 260.0, 0.3, 3.0)
+			Game.arena.stage.pulse_light(global_position, Color(1.0, 0.95, 0.5), 1.6, 2.2, 0.15)
+			Sfx.play("phase_Physik", 2.0, -8.0)
+			take_hit(26.0 * (pl2.dmg_mult if pl2 != null else 1.0), Vector2.ZERO, 0.0, false, {tags = "shock", status = "none", stun = 1.0})
 	elif st == "burn":
 		if wet_t > 0.0:
 			_steam_burst()

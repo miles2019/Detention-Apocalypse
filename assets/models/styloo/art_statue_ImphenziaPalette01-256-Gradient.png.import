@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://041ujdp0q63v"
-path="res://.godot/imported/chem_cupboard_3_ImphenziaPalette01-256-Gradient.png-6a3118baf6476b57d1c75324045a74a1.ctex"
+uid="uid://c123jv714yqcn"
+path="res://.godot/imported/art_statue_ImphenziaPalette01-256-Gradient.png-d1d3b9d2e24fb1b5a147e687be621424.ctex"
 metadata={
 "vram_texture": false
 }
@@ -13,8 +13,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/models/styloo/chem_cupboard_3_ImphenziaPalette01-256-Gradient.png"
-dest_files=["res://.godot/imported/chem_cupboard_3_ImphenziaPalette01-256-Gradient.png-6a3118baf6476b57d1c75324045a74a1.ctex"]
+source_file="res://assets/models/styloo/art_statue_ImphenziaPalette01-256-Gradient.png"
+dest_files=["res://.godot/imported/art_statue_ImphenziaPalette01-256-Gradient.png-d1d3b9d2e24fb1b5a147e687be621424.ctex"]
 
 [params]
 

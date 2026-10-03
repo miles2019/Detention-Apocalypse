@@ -12,6 +12,7 @@ var _wob := 0.0
 var _t := 0.0
 var _by_player := true
 var _glow: StandardMaterial3D
+var _paint := Color.WHITE
 
 const R := 22.0
 
@@ -23,6 +24,37 @@ func _ready() -> void:
 	stage.props.add_child(_pivot)
 	_pivot.position = stage.to3(global_position, 0.0)
 	# Feuerlöscher-Modell aus dem Styloo-Paket (siehe CREDITS.md); ohne Modell greifen die Grundformen darunter
+	if kind == "bucket":
+		# Farbeimer (Kunstraum): Zylinder mit bunter Farbe
+		_paint = [Color("ff5fa8"), Color("5fd0ff"), Color("ffd84a"), Color("8be05a"), Color("c78bff")][randi() % 5]
+		var bm2 := CylinderMesh.new()
+		bm2.top_radius = 0.15
+		bm2.bottom_radius = 0.12
+		bm2.height = 0.3
+		var bk := _mesh(stage, bm2, Color(0.75, 0.76, 0.8))
+		bk.position.y = 0.15
+		_glow = bk.material_override
+		var pm := CylinderMesh.new()
+		pm.top_radius = 0.135
+		pm.bottom_radius = 0.135
+		pm.height = 0.03
+		_mesh(stage, pm, _paint).position.y = 0.3
+		return
+	if kind == "vending":
+		var vm := ModelLib.instance(ModelLib.STYLOO % "cafe_vendingmachine", "")
+		if vm != null:
+			var vs: Vector3 = vm.get_meta("size")
+			var vsc := 1.05 / maxf(vs.y, 0.0001)
+			vm.scale = Vector3(vsc, vsc, vsc)
+			_pivot.add_child(vm)
+			_glow = vm.get_surface_override_material(0)
+		else:
+			var vb := BoxMesh.new()
+			vb.size = Vector3(0.5, 1.0, 0.4)
+			var vbn := _mesh(stage, vb, Color(0.3, 0.75, 0.85))
+			vbn.position.y = 0.5
+			_glow = vbn.material_override
+		return
 	var model: MeshInstance3D = ModelLib.instance(ModelLib.STYLOO % "chem_fireextinguisher", "") if kind == "extinguisher" else null
 	if model != null:
 		var msize: Vector3 = model.get_meta("size")
@@ -102,7 +134,7 @@ func trigger(delay: float = 0.0, by_player: bool = true) -> void:
 		return
 	used = true
 	_by_player = by_player
-	fuse = maxf(delay, 0.05) if kind == "extinguisher" else maxf(delay, 0.55)
+	fuse = maxf(delay, 0.55) if kind == "cabinet" else maxf(delay, 0.05)
 	_wob = 1.5
 	Sfx.play("warn", 1.5 if kind == "cabinet" else 1.9, -6.0)
 
@@ -137,6 +169,35 @@ func _go() -> void:
 	_pivot.visible = false
 	if _by_player:
 		Game.stats.objects_used += 1
+	if kind == "bucket":
+		# Farbe läuft aus: große Fläche bremst Gegner und macht den Spieler schneller
+		Sfx.play("splat", 0.9)
+		Juice.shake(0.25)
+		Juice.burst(pos + Vector2(0, -14), _paint, 22, 300.0, 0.6, 5.0, 360.0, Vector2.UP, 240.0)
+		Juice.float_text_at(pos, 50.0, "Platsch!", _paint.lightened(0.3), 22, true)
+		var plb = Game.player
+		Hazard.spawn(pos, {kind = "paint", radius = 125.0, telegraph = 0.0, duration = 9.0, tick_enemy = 6.0 * (plb.dmg_mult if plb != null else 1.0),
+			slow_enemy = 0.5, color = _paint, pattern = "paint", from_enemy = false})
+		return
+	if kind == "vending":
+		# Getränkeautomat: schießt Dosen in alle Richtungen und spendiert ein Pausenbrot
+		_pivot.visible = true
+		Sfx.play("locker", 1.2)
+		Sfx.play("coin", 0.8)
+		Juice.shake(0.3)
+		Juice.float_text_at(pos, 110.0, "Freigetränke!", Color(0.5, 0.9, 1.0), 22, true)
+		var plv = Game.player
+		var mult: float = plv.dmg_mult if plv != null else 1.0
+		for i in 12:
+			var d := Vector2.from_angle(TAU * i / 12.0 + randf() * 0.2)
+			Projectile.create(arena.fx_layer, pos + Vector2(0, -30) + d * 20.0, d * 520.0, {
+				team = "player", kind = "drop", damage = 16.0 * mult, radius = 9.0, life = 1.6, pierce = 2, bounce = 2, knockback = 260.0,
+				weapon_id = "vending", color = [Color(1.0, 0.3, 0.3), Color(0.3, 0.8, 1.0), Color(0.5, 0.95, 0.4)][i % 3]})
+		Pickup.spawn("heal", 18, pos + Vector2(0, 40), 60.0)
+		for i in 3:
+			Pickup.spawn("coin", 2, pos + Vector2(0, 40), 120.0)
+		_wob = 2.0
+		return
 	if kind == "extinguisher":
 		var r := 185.0
 		Sfx.play("shoot_steam", 1.3)
@@ -188,7 +249,7 @@ func _draw() -> void:
 	if used and fuse <= 0.0:
 		return
 	var pts := PackedVector2Array()
-	var w := 16.0 if kind == "extinguisher" else 30.0
+	var w := 30.0 if (kind == "cabinet" or kind == "vending") else 16.0
 	for i in 16:
 		var a := TAU * i / 16.0
 		pts.append(Vector2(cos(a) * w, sin(a) * w * 0.4 + 2.0))

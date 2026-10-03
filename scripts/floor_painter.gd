@@ -30,6 +30,8 @@ func _draw() -> void:
 		row += 1
 	# Handgemalte Texturen über den Farbfliesen (Labor: Kacheln, Bibliothek: Holz) – siehe CREDITS.md
 	var overlay := {"lab": ["res://assets/textures/tile.png", 0.6, Color(1.0, 1.0, 1.0, 0.42)],
+		"toilet": ["res://assets/textures/tile.png", 0.45, Color(0.75, 0.95, 1.0, 0.3)],
+		"gym": ["res://assets/textures/wood.png", 1.0, Color(1.0, 0.9, 0.7, 0.4)],
 		"library": ["res://assets/textures/wood.png", 0.75, Color(0.95, 0.8, 0.7, 0.5)]}
 	if overlay.has(style) and ResourceLoader.exists(overlay[style][0]):
 		var tex: Texture2D = Db.tex(overlay[style][0])
@@ -57,7 +59,7 @@ func _draw() -> void:
 		_blob(c, rng.randf_range(60.0, 130.0), Color(0.36, 0.4, 0.5, 0.45), rng)
 	# Farbspritzer der Mutation (Schleim, Farbe, Chemikalien)
 	var paint := [Color(0.35, 0.78, 0.3, 0.6), Color(0.62, 0.3, 0.7, 0.55), Color(0.2, 0.65, 0.65, 0.55), Color(0.85, 0.75, 0.2, 0.5), Color(0.9, 0.4, 0.55, 0.5), Color(0.55, 0.35, 0.2, 0.5)]
-	for i in (22 if style != "yard" else 8):
+	for i in ({"yard": 8, "art": 46, "gym": 6, "bus": 8}.get(style, 22)):
 		var p := Vector2(rng.randf_range(Arena.PLAY.position.x + 30, Arena.PLAY.end.x - 30), rng.randf_range(Arena.PLAY.position.y + 20, Arena.PLAY.end.y - 20))
 		_blob(p, rng.randf_range(22.0, 62.0), paint[rng.randi() % paint.size()], rng)
 		for k in 6:
@@ -74,6 +76,25 @@ func _draw() -> void:
 		draw_line(Vector2(1310, 420), Vector2(1310, 700), Color(1, 1, 1, 0.5), 5.0)
 		for k in 6:
 			draw_rect(Rect2(540 + (k % 2) * 40, 440 + k * 40, 40, 40), Color(1, 0.9, 0.3, 0.7), false, 4.0)
+	if style == "gym":
+		# Spielfeldlinien
+		var lc := Color(1, 1, 1, 0.7)
+		draw_rect(Arena.PLAY.grow(-60.0), lc, false, 6.0)
+		draw_line(Vector2(800, Arena.PLAY.position.y + 60), Vector2(800, Arena.PLAY.end.y - 60), lc, 6.0)
+		draw_arc(Vector2(800, 537), 110.0, 0, TAU, 40, lc, 6.0)
+		draw_arc(Vector2(Arena.PLAY.position.x + 60, 537), 150.0, -PI / 2, PI / 2, 24, Color(0.9, 0.3, 0.25, 0.7), 6.0)
+		draw_arc(Vector2(Arena.PLAY.end.x - 60, 537), 150.0, PI / 2, PI * 1.5, 24, Color(0.9, 0.3, 0.25, 0.7), 6.0)
+	elif style == "bus":
+		# Mittelgang mit Rutschleiste und Haltelinien
+		draw_rect(Rect2(Arena.PLAY.position.x, 300, Arena.PLAY.size.x, 470), Color(0.2, 0.2, 0.22, 0.6))
+		for k in 22:
+			draw_rect(Rect2(Arena.PLAY.position.x + 20 + k * 66.0, 528, 40, 10), Color(0.95, 0.8, 0.2, 0.75))
+		draw_line(Vector2(Arena.PLAY.position.x, 300), Vector2(Arena.PLAY.end.x, 300), Color(0.95, 0.8, 0.2, 0.6), 5.0)
+		draw_line(Vector2(Arena.PLAY.position.x, 770), Vector2(Arena.PLAY.end.x, 770), Color(0.95, 0.8, 0.2, 0.6), 5.0)
+	elif style == "computer":
+		# Kabelkanäle im Teppich
+		for k in 5:
+			draw_rect(Rect2(Arena.PLAY.position.x, 240 + k * 150.0, Arena.PLAY.size.x, 10), Color(0.15, 0.17, 0.26, 0.8))
 	if style == "library":
 		# roter Teppich und Parkett-Holzlinien
 		draw_rect(Rect2(560, Arena.PLAY.position.y + 20, 480, Arena.PLAY.size.y - 40), Color(0.55, 0.12, 0.14, 0.75))
@@ -91,7 +112,7 @@ func _draw() -> void:
 		var q := Vector2(rng.randf_range(Arena.PLAY.position.x, Arena.PLAY.end.x), rng.randf_range(Arena.PLAY.position.y, Arena.PLAY.end.y))
 		draw_line(q, q + Vector2(rng.randf_range(-24, 24), rng.randf_range(-8, 8)), Color(0.25, 0.23, 0.2, 0.3), 2.0)
 	# Düstere Ränder: zu den Raumkanten hin wird der Boden dunkler (je Kapitel unterschiedlich stark)
-	var strength: float = {"classroom": 0.88, "lab": 0.82, "library": 0.95, "yard": 0.32}.get(style, 0.55)
+	var strength: float = {"classroom": 0.88, "lab": 0.82, "library": 0.95, "yard": 0.32, "gym": 0.6, "toilet": 0.9, "bus": 0.9, "computer": 0.9}.get(style, 0.7)
 	var steps := 36
 	for k in steps:
 		var t := float(k) / float(steps)

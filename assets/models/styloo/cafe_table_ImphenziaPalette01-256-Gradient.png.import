@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cknq3uitv1uak"
-path="res://.godot/imported/chem_barrel_ImphenziaPalette01-256-Gradient.png-8dbef48c6f334239a3f1a7690977cf78.ctex"
+uid="uid://vn1k0q3g8kkm"
+path="res://.godot/imported/cafe_table_ImphenziaPalette01-256-Gradient.png-0728746c5abb47145826826f1dbadfaa.ctex"
 metadata={
 "vram_texture": false
 }
@@ -13,8 +13,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/models/styloo/chem_barrel_ImphenziaPalette01-256-Gradient.png"
-dest_files=["res://.godot/imported/chem_barrel_ImphenziaPalette01-256-Gradient.png-8dbef48c6f334239a3f1a7690977cf78.ctex"]
+source_file="res://assets/models/styloo/cafe_table_ImphenziaPalette01-256-Gradient.png"
+dest_files=["res://.godot/imported/cafe_table_ImphenziaPalette01-256-Gradient.png-0728746c5abb47145826826f1dbadfaa.ctex"]
 
 [params]
 

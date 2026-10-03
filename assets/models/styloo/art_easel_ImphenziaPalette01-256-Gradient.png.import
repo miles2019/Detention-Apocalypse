@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://6i82i4quyo5a"
-path="res://.godot/imported/office_shelf_ImphenziaPalette01-256-Gradient.png-62bda08cb1e71c6324df2002584cd23d.ctex"
+uid="uid://tpnxlp5f277o"
+path="res://.godot/imported/art_easel_ImphenziaPalette01-256-Gradient.png-9b6d8876af6aa96feb4336cfb2b7561a.ctex"
 metadata={
 "vram_texture": false
 }
@@ -13,8 +13,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/models/styloo/office_shelf_ImphenziaPalette01-256-Gradient.png"
-dest_files=["res://.godot/imported/office_shelf_ImphenziaPalette01-256-Gradient.png-62bda08cb1e71c6324df2002584cd23d.ctex"]
+source_file="res://assets/models/styloo/art_easel_ImphenziaPalette01-256-Gradient.png"
+dest_files=["res://.godot/imported/art_easel_ImphenziaPalette01-256-Gradient.png-9b6d8876af6aa96feb4336cfb2b7561a.ctex"]
 
 [params]
 

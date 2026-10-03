@@ -17,6 +17,8 @@ var forced := false
 static func spawn(k: String, v: int, pos: Vector2, scatter: float = 90.0) -> void:
 	if Game.arena == null:
 		return
+	if k == "heal" and Game.mut("no_heal"):
+		return
 	var p := Pickup.new()
 	p.kind = k
 	p.value = v
@@ -134,7 +136,7 @@ func collect(pl: Node) -> void:
 			Juice.float_text_at(global_position, 20, "+%d" % value, Color(1, 0.85, 0.2), 16)
 			Juice.burst(global_position, Color(1, 0.85, 0.2), 4, 90.0, 0.3, 2.5)
 		"heal":
-			pl.heal(float(value) * float(pl.char_data.heal))
+			pl.heal(float(value) * float(pl.char_data.heal) * float(Game.room_mods.get("heal", 1.0)))
 		"rare":
 			Game.pending_levelups += 1
 			Juice.float_text_at(global_position, 40, "A+ ! Gratis-Upgrade", Color(1, 0.9, 0.3), 20, true)

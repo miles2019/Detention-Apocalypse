@@ -140,8 +140,10 @@ func _apply_zone(delta: float) -> void:
 			if e.global_position.distance_to(global_position) < radius + e.data.radius * 0.5:
 				if slow_enemy < 1.0:
 					e.apply_slow(slow_enemy, 0.3)
+				if kind == "water" and do_tick:
+					e.apply_status("wet")
 				if do_tick and tick_enemy > 0.0:
-					e.take_hit(tick_enemy, Vector2.ZERO, 0.0, false, {tags = "puddle", quiet = true, status = "burn" if kind == "fire" else ""})
+					e.take_hit(tick_enemy, Vector2.ZERO, 0.0, false, {tags = "puddle", quiet = true, status = "burn" if kind == "fire" else ("shock" if kind == "shock" else "")})
 
 func _draw() -> void:
 	var c := color

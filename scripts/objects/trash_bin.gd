@@ -13,6 +13,9 @@ var _hit_cd := {}
 var _wob := 0.0
 var _pivot: Node3D
 var _mat: StandardMaterial3D
+var ball := false           # Sporthalle: Medizinball statt Mülleimer (mehr Schaden, kaum Abklingzeit)
+var hit_dmg := 26.0
+var cooldown := 3.5
 
 func _ready() -> void:
 	add_to_group("reactive")
@@ -20,6 +23,27 @@ func _ready() -> void:
 	var stage: Stage3D = Game.arena.stage
 	_pivot = Node3D.new()
 	stage.props.add_child(_pivot)
+	if ball:
+		hit_dmg = 34.0
+		cooldown = 1.0
+		var sm := SphereMesh.new()
+		sm.radius = 0.24
+		sm.height = 0.48
+		sm.radial_segments = 20
+		sm.rings = 10
+		var sph := stage.make_mesh_node(sm, Color(0.62, 0.3, 0.16))
+		_mat = sph.material_override
+		sph.get_parent().remove_child(sph)
+		_pivot.add_child(sph)
+		var stripe := TorusMesh.new()
+		stripe.inner_radius = 0.215
+		stripe.outer_radius = 0.25
+		stripe.rings = 24
+		stripe.ring_segments = 8
+		var tr := stage.make_mesh_node(stripe, Color(0.95, 0.9, 0.8))
+		tr.get_parent().remove_child(tr)
+		_pivot.add_child(tr)
+		return
 	# Mülleimer-Modell (siehe CREDITS.md); ohne Modell bleibt der Zylinder-Platzhalter
 	var model := ModelLib.instance(ModelLib.TRASH, "")
 	if model != null:
@@ -109,13 +133,13 @@ func _process(delta: float) -> void:
 					if _hit_cd.get(id, 0) < now:
 						_hit_cd[id] = now + 500
 						var dir := vel.normalized()
-						var res2: Dictionary = Game.player.roll_damage(26.0 * Game.player.dmg_mult, 0.0)
+						var res2: Dictionary = Game.player.roll_damage(hit_dmg * Game.player.dmg_mult, 0.0)
 						e.take_hit(res2.dmg, dir, 540.0 * Game.phase_mod("kb"), res2.crit, {tags = "bin"})
 						Sfx.play_hit(res2.crit)
 						Juice.shake(0.2, dir)
 			if vel.length() < 45.0:
 				state = S.COOLDOWN
-				timer = 3.5
+				timer = cooldown
 		S.COOLDOWN:
 			timer -= delta
 			if timer <= 0.0:
@@ -142,4 +166,4 @@ func _draw() -> void:
 
 func draw_overlay(c: Control, sp: Vector2) -> void:
 	if state == S.COOLDOWN:
-		c.draw_arc(sp + Vector2(0, -52), 8.0, -PI / 2, -PI / 2 + TAU * (1.0 - timer / 3.5), 16, Color(1, 1, 1, 0.8), 3.0)
+		c.draw_arc(sp + Vector2(0, -52), 8.0, -PI / 2, -PI / 2 + TAU * (1.0 - timer / cooldown), 16, Color(1, 1, 1, 0.8), 3.0)

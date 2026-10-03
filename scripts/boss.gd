@@ -33,10 +33,8 @@ func _after_move(_delta: float) -> void:
 		Juice.hitstop(0.04)
 
 func _patterns() -> Array:
-	match data.id:
-		"etz": return ["flasks", "pool", "charge"]
-		"zorn": return ["files", "rule", "summon", "fireline"]
-	return ["balls", "whistle", "charge"]
+	var info: Dictionary = Db.boss_info.get(data.id, {})
+	return info.get("patterns", ["balls", "whistle", "charge"])
 
 func _process(delta: float) -> void:
 	if _rule_t > 0.0 and Game.state == Game.State.IN_RUN:
@@ -118,6 +116,10 @@ func _start_pattern(to_target: Vector2, dist: float) -> void:
 		"rule": windup = 1.3
 		"summon": windup = 1.0
 		"fireline": windup = 0.9
+		"slamwave": windup = 0.9
+		"laser": windup = 1.0
+		"geyser": windup = 0.9
+		"clones": windup = 0.8
 	if phase2:
 		windup *= 0.8
 	_begin("windup", windup)
@@ -175,6 +177,25 @@ func _do_pattern() -> void:
 		"fireline":
 			_fire_line(5 if not phase2 else 7)
 			_begin("act", 0.5)
+		"slamwave":
+			_slam_wave()
+			_begin("act", 0.6)
+		"laser":
+			_laser_cross()
+			_begin("act", 0.5)
+		"geyser":
+			_geysers()
+			_begin("act", 0.5)
+		"clones":
+			var ids2: Array = Db.boss_info.get(data.id, {}).get("summons", ["sheep"])
+			for i in (2 if not phase2 else 3):
+				var a2 := TAU * i / 3.0 + randf()
+				var cp: Vector2 = Game.arena.clamp_to_arena(global_position + Vector2.from_angle(a2) * 130.0)
+				var ce: Enemy = Game.arena.spawn_enemy(ids2[i % ids2.size()], cp, 0.9, "sprinter" if phase2 else "clown")
+				ce.spawn_t = 0.35
+			Juice.ring(global_position, 140.0, Color(1.0, 0.5, 0.8), 0.4, 6.0, true)
+			Sfx.play("boss_roar", 1.5, -6.0)
+			_begin("act", 0.5)
 
 func _flask_volley() -> void:
 	var pl = Game.player
@@ -222,13 +243,61 @@ func _announce_rule() -> void:
 	_summon(2)
 
 func _summon(n: int) -> void:
-	var ids := ["nerd", "nerd", "chemist", "bird", "bird"]
+	var ids: Array = Db.boss_info.get(data.id, {}).get("summons", ["nerd", "nerd", "chemist", "bird", "bird"])
 	for i in n:
 		var a := TAU * i / float(n) + randf()
 		var pos: Vector2 = Game.arena.clamp_to_arena(global_position + Vector2.from_angle(a) * 150.0)
 		var e: Enemy = Game.arena.spawn_enemy(ids[i % ids.size()], pos, 0.8)
 		e.spawn_t = 0.35
 	Juice.ring(global_position, 150.0, Color(1, 0.8, 0.4), 0.4, 6.0, true)
+
+## Drei Einschläge nacheinander: unter dem Boss, beim Spieler, vor dem Spieler
+func _slam_wave() -> void:
+	var pl = Game.player
+	if pl == null:
+		return
+	var spots: Array = [global_position, pl.global_position, pl.global_position + pl.velocity * 0.6]
+	if phase2:
+		spots.append(pl.global_position + Vector2.from_angle(randf() * TAU) * 140.0)
+	for i in spots.size():
+		var p: Vector2 = Game.arena.clamp_to_arena(spots[i])
+		Hazard.spawn(p, {kind = "slam", radius = 150.0 if i == 0 else 115.0, telegraph = 0.55 + 0.4 * i, burst_player = 16.0, kb = 480.0,
+			color = Color(1.0, 0.5, 0.2), pattern = "stripes", from_enemy = true, sound = "explosion"})
+	rig.squash(1.4, 0.6, 0.4)
+	Sfx.play("boss_roar", 1.2, -4.0)
+
+## Stromkreuz: Linien aus Stromfeldern in vier (Phase 2: acht) Richtungen
+func _laser_cross() -> void:
+	var dirs := 8 if phase2 else 4
+	var base := randf() * TAU
+	for k in dirs:
+		var d := Vector2.from_angle(base + TAU * k / float(dirs))
+		for i in 5:
+			var p: Vector2 = global_position + d * (90.0 + i * 92.0)
+			if not Arena.PLAY.grow(-20.0).has_point(p):
+				break
+			Hazard.spawn(p, {kind = "shock", radius = 46.0, telegraph = 0.9 + 0.05 * i, duration = 1.6, tick_player = 8.0, tick_enemy = 4.0,
+				color = Color(1.0, 0.92, 0.3), pattern = "stripes", from_enemy = true})
+	Sfx.play("phase_Physik", 1.6, -2.0)
+	Juice.shake(0.3)
+
+## Geysire: Wassereinschläge rund um den Spieler, die Pfützen hinterlassen
+func _geysers() -> void:
+	var pl = Game.player
+	if pl == null:
+		return
+	var n := 8 if phase2 else 5
+	for i in n:
+		var p: Vector2 = pl.global_position + pl.velocity * 0.3
+		if i > 0:
+			p = pl.global_position + Vector2.from_angle(randf() * TAU) * randf_range(70.0, 220.0)
+		p = Game.arena.clamp_to_arena(p)
+		Hazard.spawn(p, {kind = "impact", radius = 62.0, telegraph = 1.0 + 0.1 * i, burst_player = 11.0, kb = 260.0,
+			color = Color(0.4, 0.75, 1.0), pattern = "waves", from_enemy = true, sound = "splat",
+			follow_up = {kind = "water", radius = 70.0, telegraph = 0.0, duration = 4.0, slow_player = 0.75, slow_enemy = 0.85,
+				color = Color(0.4, 0.75, 1.0), pattern = "waves", from_enemy = true}})
+	Sfx.play("splat", 0.6)
+	rig.squash(0.85, 1.3, 0.3)
 
 func _fire_line(n: int) -> void:
 	var pl = Game.player
@@ -270,7 +339,7 @@ func _enter_phase2() -> void:
 			Game.arena.announcer.say("Räumungsübung! Ich wiederhole: Dies ist eine Räumungsübung. Die Arena wird kleiner.", "boss")
 			speed_boost = 1.2
 			_fire_cd = 2.0
-		_:
+		"coach":
 			Game.arena.announcer.say("Phase 2! Frau Eisenhart ruft das Schatten-Völkerballteam!", "boss")
 			for i in 3:
 				var a := TAU * i / 3.0 + 0.5
@@ -278,6 +347,10 @@ func _enter_phase2() -> void:
 				var e := Enemy.create(Db.enemies["football"], pos, 0.7)
 				e.rig.set_tint(Color(0.55, 0.5, 0.75))
 				e.spawn_t = 0.4
+		_:
+			Game.arena.announcer.say(Db.boss_info.get(data.id, {}).get("phase2", "Phase 2!"), "boss")
+			speed_boost = 1.2
+			_summon(3)
 
 func _draw_telegraph() -> void:
 	if _pattern == "charge":

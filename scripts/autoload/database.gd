@@ -24,6 +24,9 @@ var start_weapon_cost := {}
 var characters := {}
 var sets := {}
 var affixes := {}
+var mutators := {}
+var boss_info := {}          # id -> {patterns, summons, phase2}
+var boss_order: Array = []   # Reihenfolge der Bosse im Endlos-Modus
 const INITIAL_WEAPONS := ["mop", "water", "bunsen", "blowpipe", "chalk", "stapler", "megaphone", "compass"]
 var _tex_cache := {}
 

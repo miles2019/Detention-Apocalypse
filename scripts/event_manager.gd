@@ -15,7 +15,9 @@ func begin_wave(n: int) -> void:
 	end_all()
 	_scheduled = ""
 	var chance := 0.5 + 0.1 * float(Game.chapter - 1)
-	if n >= 2 and randf() < chance:
+	if Game.mut("alarm"):
+		chance = 1.0
+	if (n >= 2 or Game.mut("alarm")) and randf() < chance:
 		var ids: Array = Db.events.keys()
 		ids.erase(_last)
 		_scheduled = ids[randi() % ids.size()]

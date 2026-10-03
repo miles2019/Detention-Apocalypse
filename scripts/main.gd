@@ -142,6 +142,7 @@ func _enter_hub() -> void:
 	Game.player = null
 	Game.chapter = 0
 	Game.difficulty = 0
+	Game.mutators = []
 	stage = Stage3D.new()
 	world.add_child(stage)
 	arena = Arena.new()
@@ -155,6 +156,7 @@ func _start_from_director() -> void:
 	Game.chapter = int(Save.data.chapter_selected)
 	Game.difficulty = int(Save.data.difficulty)
 	Game.endless = bool(Save.data.endless)
+	Game.mutators = Save.data.mutators.duplicate()
 	_start_run()
 
 func _start_run() -> void:
