@@ -123,8 +123,9 @@ func _fire_melee(dir: Vector2) -> void:
 
 func _fire_slam() -> void:
 	var origin: Vector2 = player.global_position
-	var reach := data.reach * (1.0 + 0.1 * float(level - 1))
+	var reach: float = data.reach * (1.0 + 0.1 * float(level - 1)) * player.area_mult
 	Juice.ring(origin, reach, data.color, 0.35, 10.0, true)
+	Game.arena.blast(origin, reach, true, 2)
 	Juice.burst(origin, Color(0.85, 0.8, 0.7), 18, 240.0, 0.6, 5.0, 180.0, Vector2.UP, 0.0, "circle", 8.0)
 	Juice.shake(0.55)
 	Juice.zoom_pop(0.03)
@@ -162,6 +163,14 @@ func _fire_bullet(dir: Vector2) -> void:
 	var n := count()
 	var spd := data.speed * Game.phase_mod("proj_speed")
 	var bnc := data.bounce + int(Game.phase_mod("bounce", 0.0))
+	var prc := data.pierce
+	# Fach-Set Physik: mehr Abpraller/Tempo, ab Stufe 2 zusätzlicher Durchschlag
+	var phys: int = player.syn_tier("Physik")
+	if phys >= 1:
+		bnc += 1
+		spd *= 1.15
+	if phys >= 2:
+		prc += 1
 	var base_pos := _muzzle(dir)
 	for i in n:
 		var off := 0.0
@@ -171,7 +180,7 @@ func _fire_bullet(dir: Vector2) -> void:
 			off = deg_to_rad(randf_range(-data.spread, data.spread) * 0.25)
 		var v := Vector2.from_angle(dir.angle() + off) * spd
 		var props := {
-			team = "player", damage = dmg(), pierce = data.pierce, bounce = bnc,
+			team = "player", damage = dmg(), pierce = prc, bounce = bnc,
 			life = data.reach / data.speed * 1.4, knockback = data.knockback, weapon_id = data.id,
 			color = data.color, chain = prm("chain", 0), sticky = prm("sticky", 0.0), combo = prm("combo", false),
 		}
@@ -228,7 +237,7 @@ func _fire_ring() -> void:
 	if stun_all > 0.0:
 		stun_chance = 1.0
 		stun = stun_all
-	var radius := data.reach * mul * (1.0 + 0.1 * float(level - 1))
+	var radius: float = data.reach * mul * (1.0 + 0.1 * float(level - 1)) * player.area_mult
 	Shockwave.create(Juice.fx_parent(), origin, {
 		team = "player", max_radius = radius, duration = 0.4, damage = 0.0 if prm("no_damage", false) else dmg(),
 		knockback = data.knockback, stun = stun, stun_chance = stun_chance, color = data.color, weapon_id = data.id,
@@ -248,8 +257,18 @@ func _fire_lob(dir: Vector2) -> void:
 	var pos: Vector2 = player.global_position + dir * 200.0
 	if target != null:
 		pos = target.global_position + target.velocity * 0.35
+	var rad: float = 70.0 * (1.0 + 0.1 * float(level - 1)) * player.area_mult
+	if prm("puddle", "") == "fire":
+		# Suppenkelle: Einschlag + brennende Suppenpfütze
+		Hazard.spawn(pos, {
+			kind = "impact", radius = rad, telegraph = 0.5, burst_enemy = dmg(), kb = data.knockback, color = data.color, pattern = "bubbles",
+			fly_tex = Db.tex(data.icon), fly_from = _muzzle(dir), from_enemy = false, sound = "splat",
+			follow_up = {kind = "fire", radius = rad * 0.85, telegraph = 0.0, duration = 3.5, tick_enemy = 7.0 * player.dmg_mult * (1.0 + 0.3 * float(level - 1)),
+				slow_enemy = 0.7, color = Color(1.0, 0.6, 0.2), pattern = "bubbles", from_enemy = false},
+		})
+		return
 	Hazard.spawn(pos, {
-		kind = "chalk", radius = 70.0 * (1.0 + 0.1 * float(level - 1)), telegraph = 0.5, duration = 3.0, burst_enemy = dmg(),
+		kind = "chalk", radius = rad, telegraph = 0.5, duration = 3.0, burst_enemy = dmg(),
 		kb = data.knockback, slow_enemy = 0.5, color = Color(1.0, 0.85, 0.45), pattern = "stripes",
 		fly_tex = Db.tex(data.proj_icon), fly_from = _muzzle(dir), from_enemy = false, sound = "explosion",
 	})
@@ -267,7 +286,7 @@ func _fire_steam(dir: Vector2) -> void:
 
 func _fire_cone(dir: Vector2) -> void:
 	var origin: Vector2 = player.global_position + Vector2(0, -22)
-	var reach := data.reach * (1.0 + 0.06 * float(level - 1))
+	var reach: float = data.reach * (1.0 + 0.06 * float(level - 1)) * player.area_mult
 	var half := deg_to_rad(data.spread)
 	var blind: float = prm("blind", 0.0)
 	var slow: float = prm("slow", 0.0)

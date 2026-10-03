@@ -28,6 +28,24 @@ var _wave_damage_mark := 0.0
 var hub_mode := false
 var _grid := {}
 const CELL := 64.0
+var _obst: Array = []           # zerstörbare Hindernisse: {rect, shape, hp}
+var props_list: Array = []      # Feuerlöscher / Chemieschränke
+var boss_fight := false
+var boss_name := ""
+var boss_title_txt := ""
+var _boss_wave_done := -1
+# Wegfindung: Flussfeld (Breitensuche vom Spieler aus) auf einem groben Raster, getrennt für kleine und große Gegner
+const NAV := 32.0
+const NAV_PAD := [18.0, 28.0]
+var _nav_w := 0
+var _nav_h := 0
+var _nav_blocked: Array = [PackedByteArray(), PackedByteArray()]
+var _nav_dist: Array = [PackedInt32Array(), PackedInt32Array()]
+var _nav_rects: Array = [[], []]
+var _nav_cell := Vector2i(-99, -99)
+var _nav_t := 0.0
+var _nav_big_used := false
+var _nav_dirty := true
 
 const HUB_STATIONS := [
 	{kind = "skills", pos = Vector2(380, 340), title = "Alte Tafel", hint = "Dauerhafte Verbesserungen kaufen", accent = Color(0.5, 0.9, 0.6)},
@@ -40,7 +58,6 @@ const HUB_STATIONS := [
 var _lamps: Array = []
 var _lamp_flicker := 0.0
 var _transition_t := 0.0
-var _boss_fight := false
 
 func _ready() -> void:
 	Game.arena = self
@@ -112,7 +129,9 @@ func _build_walls_and_obstacles() -> void:
 	# Schultische (Platzhalter-Grafik wird im Boden gezeichnet)
 	obstacles = _layout(chapter.style)
 	for r in obstacles:
-		_add_rect_shape(body, Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14)))
+		var cs := _add_rect_shape(body, Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14)))
+		_obst.append({rect = r, shape = cs, hp = 5 if (r.size.x < 80.0 or r.size.y > 150.0) else 3})
+	_nav_rebuild()
 
 func _layout(style: String) -> Array:
 	match style:
@@ -140,13 +159,14 @@ func _build_stations() -> void:
 		s.global_position = st.pos
 		entities.add_child(s)
 
-func _add_rect_shape(body: StaticBody2D, r: Rect2) -> void:
+func _add_rect_shape(body: StaticBody2D, r: Rect2) -> CollisionShape2D:
 	var cs := CollisionShape2D.new()
 	var sh := RectangleShape2D.new()
 	sh.size = r.size
 	cs.shape = sh
 	cs.position = r.position + r.size * 0.5
 	body.add_child(cs)
+	return cs
 
 func _build_objects() -> void:
 	for pos in [Vector2(520, 880), Vector2(1100, 580)]:
@@ -164,6 +184,23 @@ func _build_objects() -> void:
 	b2.facing = -1.0
 	entities.add_child(b2)
 	boards.append(b2)
+	# Feuerlöscher und Chemieschränke je nach Raum
+	var spots: Array = []
+	match chapter.style:
+		"lab":
+			spots = [["cabinet", Vector2(170, 215)], ["cabinet", Vector2(1430, 215)], ["cabinet", Vector2(800, 905)],
+				["extinguisher", Vector2(150, 890)], ["extinguisher", Vector2(1450, 890)]]
+		"library":
+			spots = [["extinguisher", Vector2(150, 890)], ["extinguisher", Vector2(1450, 890)], ["cabinet", Vector2(800, 905)]]
+		_:
+			spots = [["extinguisher", Vector2(150, 200)], ["extinguisher", Vector2(1450, 200)],
+				["cabinet", Vector2(170, 890)], ["cabinet", Vector2(1430, 890)]]
+	for sp in spots:
+		var pr := ArenaProp.new()
+		pr.kind = sp[0]
+		pr.position = sp[1]
+		entities.add_child(pr)
+		props_list.append(pr)
 
 func _build_lamps() -> void:
 	for pos in [Vector2(420, 420), Vector2(1180, 420), Vector2(420, 800), Vector2(1180, 800), Vector2(800, 620)]:
@@ -209,6 +246,7 @@ func _physics_process(_delta: float) -> void:
 				_grid[k].append(e)
 			else:
 				_grid[k] = [e]
+	_nav_update(_delta)
 
 func enemies_near(p: Vector2, r: float) -> Array:
 	var out: Array = []
@@ -222,6 +260,216 @@ func enemies_near(p: Vector2, r: float) -> Array:
 			if l != null:
 				out.append_array(l)
 	return out
+
+# ---------------------------------------------------------------- Wegfindung (Flussfeld)
+func _nav_rebuild() -> void:
+	_nav_w = int(ceil(PLAY.size.x / NAV))
+	_nav_h = int(ceil(PLAY.size.y / NAV))
+	for k in 2:
+		var pad: float = NAV_PAD[k]
+		var rects: Array = []
+		for r in obstacles:
+			# Fußpunkt-Sperrzone: Kollisionsrechteck, um den Körperradius erweitert (Körpermitte liegt über den Füßen)
+			var c := Rect2(r.position + Vector2(0, 14), r.size - Vector2(0, 14))
+			rects.append(Rect2(c.position.x - pad, c.position.y - 2.0, c.size.x + pad * 2.0, c.size.y + pad * 2.0 + 2.0))
+		_nav_rects[k] = rects
+		var b := PackedByteArray()
+		b.resize(_nav_w * _nav_h)
+		for y in _nav_h:
+			for x in _nav_w:
+				var p := PLAY.position + Vector2((x + 0.5) * NAV, (y + 0.5) * NAV)
+				for rr in rects:
+					if rr.has_point(p):
+						b[y * _nav_w + x] = 1
+						break
+		_nav_blocked[k] = b
+	_nav_dirty = true
+
+func _nav_cell_of(p: Vector2) -> Vector2i:
+	return Vector2i(clampi(int((p.x - PLAY.position.x) / NAV), 0, _nav_w - 1), clampi(int((p.y - PLAY.position.y) / NAV), 0, _nav_h - 1))
+
+func _nav_update(delta: float) -> void:
+	_nav_t -= delta
+	if hub_mode or player == null or _nav_w == 0:
+		return
+	var c := _nav_cell_of(player.global_position)
+	if (c != _nav_cell or _nav_dirty) and _nav_t <= 0.0:
+		_nav_t = 0.12
+		_nav_cell = c
+		_nav_dirty = false
+		_nav_bfs(0, c)
+		if _nav_big_used:
+			_nav_bfs(1, c)
+
+func _nav_bfs(k: int, start: Vector2i) -> void:
+	var n := _nav_w * _nav_h
+	var dist := PackedInt32Array()
+	dist.resize(n)
+	dist.fill(-1)
+	var b: PackedByteArray = _nav_blocked[k]
+	var q := PackedInt32Array()
+	q.resize(n)
+	var head := 0
+	var tail := 0
+	var s := start.y * _nav_w + start.x
+	dist[s] = 0
+	q[tail] = s
+	tail += 1
+	var w := _nav_w
+	while head < tail:
+		var c := q[head]
+		head += 1
+		var d := dist[c] + 1
+		var cx := c % w
+		if cx > 0 and dist[c - 1] < 0 and b[c - 1] == 0:
+			dist[c - 1] = d
+			q[tail] = c - 1
+			tail += 1
+		if cx < w - 1 and dist[c + 1] < 0 and b[c + 1] == 0:
+			dist[c + 1] = d
+			q[tail] = c + 1
+			tail += 1
+		if c >= w and dist[c - w] < 0 and b[c - w] == 0:
+			dist[c - w] = d
+			q[tail] = c - w
+			tail += 1
+		if c < n - w and dist[c + w] < 0 and b[c + w] == 0:
+			dist[c + w] = d
+			q[tail] = c + w
+			tail += 1
+	_nav_dist[k] = dist
+
+## Richtung (Einheitsvektor) entlang des Flussfelds zum Spieler; ZERO, wenn kein Weg bekannt ist
+func nav_dir(from: Vector2, big: bool = false) -> Vector2:
+	var k := 1 if big else 0
+	if big and not _nav_big_used:
+		_nav_big_used = true
+		_nav_dirty = true
+	var dist: PackedInt32Array = _nav_dist[k]
+	if dist.is_empty():
+		return Vector2.ZERO
+	var c := _nav_cell_of(from)
+	var here := dist[c.y * _nav_w + c.x]
+	var best_score := here * 10 if here >= 0 else 1 << 30
+	var best := Vector2i(-1, -1)
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx == 0 and dy == 0:
+				continue
+			var nx := c.x + dx
+			var ny := c.y + dy
+			if nx < 0 or ny < 0 or nx >= _nav_w or ny >= _nav_h:
+				continue
+			var dj := dist[ny * _nav_w + nx]
+			if dj < 0:
+				continue
+			var score := dj * 10
+			if dx != 0 and dy != 0:
+				# nicht diagonal um Ecken schneiden
+				if dist[c.y * _nav_w + nx] < 0 or dist[ny * _nav_w + c.x] < 0:
+					continue
+				score += 4
+			if score < best_score:
+				best_score = score
+				best = Vector2i(nx, ny)
+	if best.x < 0:
+		return Vector2.ZERO
+	var target := PLAY.position + Vector2((best.x + 0.5) * NAV, (best.y + 0.5) * NAV)
+	return (target - from).normalized()
+
+## Freie Sichtlinie (Fußpunkt zu Fußpunkt) an allen Hindernissen vorbei?
+func los(a: Vector2, b: Vector2, big: bool = false) -> bool:
+	for rr in _nav_rects[1 if big else 0]:
+		if _seg_hits(a, b, rr):
+			return false
+	return true
+
+func _seg_hits(a: Vector2, b: Vector2, r: Rect2) -> bool:
+	var d := b - a
+	var t0 := 0.0
+	var t1 := 1.0
+	for axis in 2:
+		var o: float = a[axis]
+		var dd: float = d[axis]
+		var mn: float = r.position[axis]
+		var mx: float = r.end[axis]
+		if absf(dd) < 0.0001:
+			if o < mn or o > mx:
+				return false
+		else:
+			var ta := (mn - o) / dd
+			var tb := (mx - o) / dd
+			if ta > tb:
+				var tmp := ta
+				ta = tb
+				tb = tmp
+			t0 = maxf(t0, ta)
+			t1 = minf(t1, tb)
+			if t0 > t1:
+				return false
+	return true
+
+# ---------------------------------------------------------------- Zerstörbare Umgebung
+func _circle_hits_rect(c: Vector2, radius: float, r: Rect2) -> bool:
+	var q := Vector2(clampf(c.x, r.position.x, r.end.x), clampf(c.y, r.position.y, r.end.y))
+	return q.distance_squared_to(c) <= radius * radius
+
+## Bosse walzen Hindernisse nieder: alles im Radius wird sofort zerstört. Gibt die Anzahl zurück.
+func smash_obstacles(center: Vector2, radius: float, dir: Vector2, by_player: bool = false) -> int:
+	var n := 0
+	for o in _obst.duplicate():
+		var c := Rect2(o.rect.position + Vector2(0, 14), o.rect.size - Vector2(0, 14))
+		if _circle_hits_rect(center, radius, c):
+			_destroy_obstacle(o, dir, by_player)
+			n += 1
+	return n
+
+## Explosionen und Wuchtangriffe beschädigen Tische/Regale und lösen Feuerlöscher/Chemieschränke aus
+func blast(center: Vector2, radius: float, by_player: bool, power: int = 1, source: Node = null) -> void:
+	if hub_mode:
+		return
+	for o in _obst.duplicate():
+		if _circle_hits_rect(center, radius * 0.8, o.rect):
+			o.hp -= power
+			if o.hp <= 0:
+				_destroy_obstacle(o, (o.rect.get_center() - center).normalized(), by_player)
+			else:
+				stage.shake_desk(o.rect)
+				Juice.burst(o.rect.get_center(), Color(0.66, 0.45, 0.24), 6, 160.0, 0.4, 3.5, 360.0, Vector2.UP, 200.0)
+	for pr in props_list:
+		if is_instance_valid(pr) and pr != source and not pr.used and pr.global_position.distance_to(center) < radius + 70.0:
+			pr.trigger(0.35, by_player)
+	if power >= 3:
+		for bn in bins:
+			if is_instance_valid(bn) and bn.global_position.distance_to(center) < radius + 40.0:
+				bn.kick((bn.global_position - center).normalized(), 560.0)
+
+func _destroy_obstacle(o: Dictionary, dir: Vector2, by_player: bool) -> void:
+	_obst.erase(o)
+	obstacles.erase(o.rect)
+	if is_instance_valid(o.shape):
+		o.shape.queue_free()
+	var c: Vector2 = o.rect.get_center()
+	stage.destroy_desk(o.rect, dir)
+	Sfx.play("explosion", 1.45, -3.0)
+	Sfx.play("kick", 0.7)
+	Juice.shake(0.5, dir)
+	Juice.burst(c + Vector2(0, -20), Color(0.66, 0.45, 0.24), 24, 340.0, 0.75, 5.0, 360.0, Vector2.UP, 320.0)
+	Juice.burst(c + Vector2(0, -10), Color(0.92, 0.9, 0.82, 0.9), 10, 170.0, 0.8, 6.0, 360.0, Vector2.UP, 0.0, "circle", 14.0)
+	Juice.ring(c, 115.0, Color(1.0, 0.9, 0.7), 0.3, 6.0)
+	splat(c, Color(0.25, 0.17, 0.1, 0.5), 36.0)
+	Juice.float_text_at(c, 60.0, "KRACH!", Color(1.0, 0.85, 0.5), 22, true)
+	room_react(c, 1.2)
+	stage.pulse_light(c, Color(1.0, 0.85, 0.6), 1.4, 2.6, 0.2)
+	Game.stats.smashed += 1
+	if by_player:
+		Game.stats.objects_used += 1
+	# Splitter treffen Mutanten in der Nähe
+	var mult: float = player.dmg_mult if player != null else 1.0
+	for e in Game.enemies.duplicate():
+		if is_instance_valid(e) and not e.dead and e.data.behavior != "boss" and e.global_position.distance_to(c) < 125.0 + e.data.radius:
+			e.take_hit(18.0 * mult, (e.global_position - c).normalized(), 320.0, false, {tags = "debris"})
+	_nav_rebuild()
 
 func _process(delta: float) -> void:
 	_lamp_flicker = maxf(0.0, _lamp_flicker - delta * 1.5)
@@ -240,7 +488,10 @@ func _process(delta: float) -> void:
 func start_next_wave() -> void:
 	Game.wave += 1
 	collect_all = false
-	_boss_fight = false
+	boss_fight = false
+	for pr in props_list:
+		if is_instance_valid(pr):
+			pr.reset()
 	Game.wave_changed.emit(Game.wave, Game.TOTAL_WAVES)
 	_wave_damage_mark = Game.stats.damage_taken
 	director.start_wave(Game.wave)
@@ -273,20 +524,55 @@ func _on_wave_cleared() -> void:
 	Game.change_state(Game.State.WAVE_TRANSITION)
 
 func after_shop() -> void:
-	if Game.wave >= Game.TOTAL_WAVES:
+	if Game.endless:
+		# Endlos: alle 5 Wellen ein Boss, danach geht es weiter
+		if Game.wave % 5 == 0 and _boss_wave_done != Game.wave:
+			start_boss_intro()
+		else:
+			start_next_wave()
+	elif Game.wave >= Game.TOTAL_WAVES:
 		start_boss_intro()
 	else:
 		start_next_wave()
 
+## Endlos-Modus: Boss besiegt -> Pause, Kiosk, nächste Welle
+func endless_boss_done() -> void:
+	if Game.state != Game.State.IN_RUN:
+		return
+	_boss_wave_done = Game.wave
+	boss_fight = false
+	boss = null
+	collect_all = true
+	_transition_t = 0.0
+	Game.add_money(18 + 2 * Game.wave)
+	Sfx.play("bell", 1.1, -2.0)
+	Game.stamp_requested.emit("Nachsitzen verlängert!", Color(0.2, 0.5, 0.9))
+	Game.announce.emit("Das war noch nicht alles, Herr Kollege. Der Stundenplan ist heute unendlich.", "info")
+	Game.change_state(Game.State.WAVE_TRANSITION)
+
 ## Boss-Auftritt als kleine Kamerafahrt: Zoom auf den Einschlag, Titelkarte, Rückzug in die Kampfansicht
 func start_boss_intro() -> void:
-	_boss_fight = true
+	boss_fight = true
 	collect_all = false
 	events.end_all()
-	Game.wave += 1
+	var boss_id: String = chapter.boss
+	var hp_scale: float = chapter.hp_scale
+	if Game.endless:
+		var round_n := int(Game.wave / 5)
+		boss_id = ["coach", "etz", "zorn"][(round_n - 1) % 3]
+		hp_scale = 1.0 + 0.45 * float(round_n - 1)
+	else:
+		Game.wave += 1
+	boss_name = chapter.boss_name
+	boss_title_txt = chapter.boss_title
+	for n in Db.chapters:
+		if n > 0 and Db.chapters[n].boss == boss_id:
+			boss_name = Db.chapters[n].boss_name
+			boss_title_txt = Db.chapters[n].boss_title
 	Game.wave_changed.emit(Game.wave, Game.TOTAL_WAVES)
-	var d: EnemyData = Db.enemies[chapter.boss]
-	boss = Enemy.create(d, Vector2(800, 330), chapter.hp_scale * (1.0 + 0.25 * float(Game.difficulty)))
+	var d: EnemyData = Db.enemies[boss_id]
+	boss = Enemy.create(d, Vector2(800, 330), hp_scale * (1.0 + 0.25 * float(Game.difficulty)))
+	smash_obstacles(Vector2(800, 330), 90.0, Vector2.DOWN)
 	boss.spawn_t = 0.0
 	boss.process_mode = Node.PROCESS_MODE_ALWAYS
 	phases.begin_boss()
@@ -314,7 +600,7 @@ func start_boss_intro() -> void:
 		boss.rig.flash(0.25)
 		Sfx.play("explosion", 0.6)
 		room_react(boss.global_position, 2.0)
-		Game.boss_title.emit(chapter.boss_name, chapter.boss_title, chapter.intro))
+		Game.boss_title.emit(boss_name, boss_title_txt, chapter.intro))
 	# 3) langsame Kamerafahrt zum Gesicht, Dutch-Angle löst sich
 	tw.set_parallel(true)
 	tw.tween_property(camera, "base_zoom", 1.35, 2.0).set_trans(Tween.TRANS_SINE)
@@ -375,14 +661,14 @@ func random_spawn_pos() -> Vector2:
 			return p
 	return PLAY.get_center()
 
-func spawn_with_marker(id: String, pos: Vector2, hp_mult: float, done: Callable) -> void:
-	Hazard.spawn(pos, {radius = 30.0, telegraph = 0.8, color = Color(1, 1, 1), from_enemy = false, kind = "marker",
+func spawn_with_marker(id: String, pos: Vector2, hp_mult: float, done: Callable, affix: String = "") -> void:
+	Hazard.spawn(pos, {radius = 30.0 if affix == "" else 46.0, telegraph = 0.8, color = Color(1, 1, 1) if affix == "" else Color(1.0, 0.8, 0.2), from_enemy = false, kind = "marker",
 		on_activate = func():
 			done.call()
-			spawn_enemy(id, pos, hp_mult)})
+			spawn_enemy(id, pos, hp_mult, affix)})
 
-func spawn_enemy(id: String, pos: Vector2, hp_mult: float = 1.0) -> Enemy:
-	var e := Enemy.create(Db.enemies[id], pos, hp_mult)
+func spawn_enemy(id: String, pos: Vector2, hp_mult: float = 1.0, affix: String = "") -> Enemy:
+	var e := Enemy.create(Db.enemies[id], pos, hp_mult, false, affix)
 	Juice.burst(pos, Color(1, 1, 1, 0.8), 8, 130.0, 0.35, 3.0)
 	return e
 

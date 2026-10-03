@@ -49,6 +49,13 @@ var run_won := false
 var last_rewards := {}
 var stats := {}
 var chain := 0
+var endless := false
+var lv_rerolls := 2
+var lv_bans := 2
+var lv_locks := 1
+var banned: Array = []
+var locked_upgrade := ""
+var endless_rank := 0
 var _last_kill_ms := 0
 var settings := {master = 0.8, music = 0.55, sfx = 0.9, voice = 0.9, shake = 1.0, ui_scale = 1.0, reduced_motion = false}
 const ACTIONS := {
@@ -159,9 +166,16 @@ func reset_run() -> void:
 	run_won = false
 	rule_block = ""
 	event_mods = {}
+	endless = false
+	lv_rerolls = 2
+	lv_bans = 2
+	lv_locks = 1
+	banned = []
+	locked_upgrade = ""
+	endless_rank = 0
 	enemies.clear()
 	stats = {kills = 0, damage_dealt = 0.0, damage_taken = 0.0, objects_used = 0, dodges = 0,
-		max_chain = 0, money_earned = 0, events = 0, flawless = 0, elites = 0, bosses = 0, revived = false, time = 0.0, crits = 0, synergies = 0, waves = 0}
+		max_chain = 0, money_earned = 0, events = 0, flawless = 0, elites = 0, champions = 0, bosses = 0, sold = 0, smashed = 0, revived = false, time = 0.0, crits = 0, synergies = 0, waves = 0}
 
 func xp_needed(lv: int = -1) -> int:
 	if lv < 0:
@@ -182,7 +196,8 @@ func spend_money(v: int) -> bool:
 	return true
 
 func add_xp(v: int) -> void:
-	v = int(round(float(v) * (1.0 + Save.bonus("xp")) * phase_mod("xp")))
+	var cm: float = player.char_data.xp if player != null else 1.0
+	v = int(round(float(v) * (1.0 + Save.bonus("xp")) * phase_mod("xp") * cm))
 	xp += v
 	while xp >= xp_needed():
 		xp -= xp_needed()
@@ -236,6 +251,17 @@ func phase_mod(key: String, default: float = 1.0) -> float:
 func chapter_data() -> Dictionary:
 	return Db.chapters[chapter]
 
+## Wellen-Definition (Kapitel oder prozedural im Endlos-Modus)
+func wave_def(n: int) -> Dictionary:
+	if endless:
+		return DbExtra.endless_wave(n)
+	var w: Array = Db.chapters[chapter].waves
+	return w[clampi(n - 1, 0, w.size() - 1)]
+
+## Gegnerschaden wächst im Endlos-Modus ab Welle 6 langsam mit
+func endless_dmg() -> float:
+	return (1.0 + 0.04 * float(maxi(0, wave - 5))) if endless else 1.0
+
 func change_state(s: int) -> void:
 	if s == state:
 		return
@@ -287,7 +313,10 @@ func _award(won: bool) -> void:
 	var diff_mul := 1.0 + 0.3 * float(difficulty)
 	var chap: Dictionary = Db.chapters[chapter]
 	var passes := int((float(stats.waves) * 2.0 + float(stats.kills) / 30.0 + (8.0 * chap.reward if won else 0.0)) * diff_mul)
-	var marken := int(stats.elites + (3 if won else 0))
+	var marken := int(stats.elites + stats.champions / 3 + (3 if won else 0))
+	if endless:
+		marken += stats.bosses * 2
+		endless_rank = Save.add_endless_score(wave, stats.kills, stats.time, player.char_data.name if player != null else "?")
 	var unlocks: Array = []
 	Save.data.runs += 1
 	Save.data.total_kills += stats.kills

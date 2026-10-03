@@ -21,6 +21,9 @@ var chapters := {}
 var challenges := {}
 var ags := {}
 var start_weapon_cost := {}
+var characters := {}
+var sets := {}
+var affixes := {}
 const INITIAL_WEAPONS := ["mop", "water", "bunsen", "blowpipe", "chalk", "stapler", "megaphone", "compass"]
 var _tex_cache := {}
 

@@ -15,6 +15,9 @@ static func build(db: Node) -> void:
 	_chapters(db)
 	_challenges(db)
 	_ags(db)
+	_characters(db)
+	_sets(db)
+	_affixes(db)
 
 static func _weapons(db: Node) -> void:
 	db._w("ruler", "Lineal-Schwert", "Mathe", "melee", 12, 0.5, 95, 34, Color("cfe3ff"),
@@ -39,6 +42,8 @@ static func _weapons(db: Node) -> void:
 		"Klebt Gegner fest – nach kurzer Zeit platzen sie.", 12, {speed = 520.0, knockback = 40.0, fire_sfx = "splat", params = {sticky = 1.3}})
 	db._w("calculator", "Taschenrechner", "Mathe", "bullet", 5, 0.28, 400, 25, Color("8fe0a0"),
 		"Jeder Treffer in Folge erhöht den Multiplikator.", 12, {speed = 640.0, spread = 4.0, knockback = 50.0, fire_sfx = "shoot_pea", params = {combo = true}})
+	db._w("soup", "Suppenkelle", "Chemie", "lob", 20, 1.5, 360, 37, Color("ff9a4a"),
+		"Schleudert heiße Mensa-Suppe: Flächenschaden und eine brennende Pfütze.", 13, {knockback = 180.0, fire_sfx = "shoot_chalk", proj_icon = P % 1, params = {puddle = "fire"}})
 	# --- Evolutionen
 	db._w("geometry", "Geometrie-Todesstern", "Mathe", "orbit", 11, 0.2, 115, 17, Color("ffd84a"),
 		"EVOLUTION: Rotierende Zirkel schneiden Ringbahnen um Mr. Scrubbs.", 0, {evolution = true, params = {blades = 4}, fire_sfx = "shoot_compass"})
@@ -166,3 +171,68 @@ static func _enemies(db: Node) -> void:
 		{radius = 30.0, xp = 100, coin_chance = 1.0, coin_value = 8, material = "glass", faces_right = false, elite = true})
 	db._en("zorn", "Rektor Dr. Zorn", 1500, 56, 16, ["bigfrog_00.png"], 170, "boss",
 		{radius = 36.0, xp = 120, coin_chance = 1.0, coin_value = 10, material = "slime", faces_right = false, elite = true, tex_alt = E + "bigfrog_01.png"})
+
+static func _characters(db: Node) -> void:
+	db.characters = {
+		scrubbs = {id = "scrubbs", name = "Mr. Scrubbs", title = "Der Hausmeister", cost = 0, tex = "res://assets/chars/scrubbs.png",
+			tint = Color.WHITE, height = 66.0, hp = 100.0, speed = 1.0, dmg = 1.0, slots = 4, xp = 1.0, area = 1.0, heal = 1.0, options = 3,
+			start_weapon = "", bars = {hp = 3, speed = 3, dmg = 3}, diff = "Normal", ability = "Reinigungs-Aura",
+			desc = "Ausgewogenes Startprofil. Seine Reinigungs-Aura wischt Säurepfützen auf und verwandelt sie in Heilung. Startwaffe frei wählbar (Werkbank).",
+			goals = ["Überlebe die Mutierte Schule (Kapitel 1)", "Wische 10 Säurepfützen auf", "Besiege Frau Eisenhart ohne Treffer"]},
+		kelle = {id = "kelle", name = "Frau Kelle", title = "Die Mensa-Köchin", cost = 5, tex = "res://assets/chars/scrubbs.png",
+			tint = Color(1.0, 0.78, 0.72), height = 76.0, hp = 140.0, speed = 0.85, dmg = 1.0, slots = 4, xp = 1.0, area = 1.35, heal = 2.0, options = 3,
+			start_weapon = "soup", bars = {hp = 5, speed = 2, dmg = 3}, diff = "Leicht", ability = "Nachschlag",
+			desc = "Flächenschaden-Spezialistin: +35 % Radius aller Flächenangriffe und viel Leben, dafür langsam. Heil-Drops wirken doppelt. Startet mit der Suppenkelle.",
+			goals = ["Triff 5 Gegner mit einer Suppenkelle", "Gewinne ein Kapitel ohne Ausweichen", "Erreiche Welle 10 im Endlos-Nachsitzen"]},
+		probe = {id = "probe", name = "Herr Probe", title = "Der Referendar", cost = 8, tex = "res://assets/chars/scrubbs.png",
+			tint = Color(0.72, 0.85, 1.0), height = 58.0, hp = 70.0, speed = 1.06, dmg = 0.85, slots = 4, xp = 2.0, area = 1.0, heal = 1.0, options = 4,
+			start_weapon = "paperclip", bars = {hp = 2, speed = 3, dmg = 2}, diff = "Schwer", ability = "Fortbildung",
+			desc = "Schwach und zerbrechlich, lernt aber doppelt so schnell: +100 % Erfahrung und vier Antworten bei jeder Klassenarbeit. Startet mit der Büroklammer-Schleuder.",
+			goals = ["Erreiche Stufe 15 in einem Run", "Besiege einen Boss mit Herrn Probe", "Banne 2 Upgrades in einem Run"]},
+	}
+
+## Fach-Sets: Stufe 1 ab 2 Teilen, Stufe 2 ab 4 Teilen (Waffen + Items eines Fachs)
+static func _sets(db: Node) -> void:
+	db.sets = {
+		"Chemie": ["Gegner hinterlassen beim Tod Säureimpulse.", "Säureimpulse sind größer und fast doppelt so stark."],
+		"Sport": ["+10 % Tempo.", "+20 % Tempo, Ausweichen lädt 25 % schneller."],
+		"Mathe": ["+10 % kritische Trefferchance.", "Kritische Treffer verursachen 2,5-fachen Schaden."],
+		"Musik": ["Basswellen betäuben öfter.", "Jeder 10. Kill löst eine Schockwelle aus."],
+		"Kunst": ["Treffer verlangsamen Gegner.", "Verlangsamte Gegner erleiden +20 % Schaden."],
+		"Physik": ["Projektile prallen 1x öfter ab und fliegen 15 % schneller.", "Projektile durchschlagen einen Gegner zusätzlich."],
+		"Hausmeister": ["+20 % Rückstoß.", "Jeder 6. Kill heilt 3 Lebenspunkte."],
+	}
+
+## Elite-Affixe: zufällige Modifikatoren für normale Gegner. Garantierte Beute.
+static func _affixes(db: Node) -> void:
+	db.affixes = {
+		streber = {name = "Streber", color = Color(0.4, 1.0, 0.5), desc = "Heilt Mutanten in der Nähe."},
+		clown = {name = "Klassenclown", color = Color(1.0, 0.6, 0.9), desc = "Teilt sich beim Tod."},
+		petze = {name = "Petze", color = Color(1.0, 0.85, 0.3), desc = "Ruft Verstärkung."},
+		sprinter = {name = "Koffein-Junkie", color = Color(0.4, 0.8, 1.0), desc = "Sehr schnell."},
+		schild = {name = "Klassensprecher", color = Color(0.8, 0.8, 1.0), desc = "Schild blockt Treffer und lädt sich wieder auf."},
+		knall = {name = "Chemie-Unfall", color = Color(1.0, 0.5, 0.2), desc = "Explodiert beim Tod."},
+	}
+
+## Endlos-Nachsitzen: prozedurale Welle n (Budget wächst, Gegnertypen kommen nach und nach dazu)
+static func endless_wave(n: int) -> Dictionary:
+	var pool := [["bird", 1.0, 1], ["frog", 1.5, 1], ["rat", 2.0, 2], ["nerd", 2.0, 2], ["sheep", 2.0, 3], ["football", 3.0, 3],
+		["zombie", 3.5, 4], ["chemist", 3.0, 4], ["locker", 5.0, 3], ["brute", 9.0, 6]]
+	var budget := 14.0 + 5.0 * float(n)
+	var groups := {}
+	var avail: Array = []
+	for p in pool:
+		if n >= int(p[2]):
+			avail.append(p)
+	var guard := 0
+	while budget > 0.0 and guard < 300:
+		guard += 1
+		var p: Array = avail[randi() % avail.size()]
+		var id: String = p[0]
+		if id == "brute" and int(groups.get("brute", 0)) >= 1 + n / 6:
+			continue
+		if id == "locker" and int(groups.get("locker", 0)) >= 3:
+			continue
+		groups[id] = int(groups.get(id, 0)) + 1
+		budget -= float(p[1])
+	return {duration = minf(60.0, 30.0 + 2.0 * float(n)), groups = groups}

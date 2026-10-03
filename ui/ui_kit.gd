@@ -25,6 +25,7 @@ const MARG := {
 }
 
 static var _cache := {}
+static var tooltip: Tooltip
 
 static func _margins(name: String) -> Vector4:
 	for k in MARG:
@@ -222,6 +223,22 @@ static func dim(alpha: float = 0.6) -> ColorRect:
 	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	r.mouse_filter = Control.MOUSE_FILTER_STOP
 	return r
+
+## Hover-Info an ein Control hängen (Titel + Text). Mehrfacher Aufruf aktualisiert nur den Text.
+static func tip(c: Control, title: String, body: String) -> void:
+	if c.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		c.mouse_filter = Control.MOUSE_FILTER_PASS
+	c.set_meta("tip_title", title)
+	c.set_meta("tip_body", body)
+	if c.has_meta("tip_on"):
+		return
+	c.set_meta("tip_on", true)
+	c.mouse_entered.connect(func():
+		if tooltip != null and is_instance_valid(tooltip):
+			tooltip.show_tip(c, c.get_meta("tip_title"), c.get_meta("tip_body")))
+	c.mouse_exited.connect(func():
+		if tooltip != null and is_instance_valid(tooltip):
+			tooltip.hide_tip(c))
 
 static func full(c: Control) -> void:
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

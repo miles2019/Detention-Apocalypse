@@ -40,10 +40,22 @@ var speed_boost := 1.0
 var hunt := false
 var _drew := false
 var glue_burst := 0.0
+var affix := ""                 # Elite-Affix (siehe Db.affixes)
+var base_tint := Color.WHITE
+var shield := 0
+var big_nav := false
+var _shield_t := 0.0
+var _aff_t := 3.0
+var _freeze_t := 0.0
+var _nav_v := Vector2.ZERO
+var _nav_t := 0.0
+var _stuck_t := 0.0
+var _side_t := 0.0
+var _side := 1.0
 
 static var BossScript: GDScript
 
-static func create(d: EnemyData, pos: Vector2, hp_mult_: float = 1.0, mini: bool = false) -> Enemy:
+static func create(d: EnemyData, pos: Vector2, hp_mult_: float = 1.0, mini: bool = false, affix_: String = "") -> Enemy:
 	var e: Enemy
 	if d.behavior == "boss":
 		if BossScript == null:
@@ -54,6 +66,7 @@ static func create(d: EnemyData, pos: Vector2, hp_mult_: float = 1.0, mini: bool
 	e.data = d
 	e.hp_mult = hp_mult_
 	e.is_mini = mini
+	e.affix = affix_
 	e.global_position = pos
 	Game.arena.entities.add_child(e)
 	return e
@@ -79,6 +92,21 @@ func _ready() -> void:
 		_alt_tex = Db.tex(data.tex_alt)
 	if data.elite:
 		rig.aura_color = Color(1.0, 0.3, 0.25)
+	big_nav = data.radius > 19.0
+	if affix != "":
+		# Elite-Affix: größer, zäher, farbige Aura, eigene Fähigkeit
+		var af: Dictionary = Db.affixes[affix]
+		max_hp *= 2.6
+		hp = max_hp
+		rig.size_mul = 1.22
+		rig.aura_color = af.color
+		base_tint = Color.WHITE.lerp(af.color, 0.4)
+		rig.set_tint(base_tint)
+		if affix == "sprinter":
+			speed_boost = 1.55
+		elif affix == "schild":
+			shield = 3
+		_aff_t = randf_range(2.0, 4.0)
 	rig.pop_in()
 	_face = 1.0
 	last_seen = global_position
@@ -114,7 +142,7 @@ func _glue_pop() -> void:
 	var b := glue_burst
 	glue_t = 0.0
 	glue_burst = 0.0
-	rig.set_tint(Color.WHITE)
+	rig.set_tint(base_tint)
 	Juice.ring(pos, 70.0, Color(1.0, 0.5, 0.8), 0.3, 6.0, true)
 	Juice.burst(pos + Vector2(0, -20), Color(1.0, 0.5, 0.8), 14, 220.0, 0.5, 4.0, 360.0, Vector2.UP, 0.0, "circle")
 	Sfx.play("splat", 1.3)
@@ -123,6 +151,19 @@ func _glue_pop() -> void:
 		if is_instance_valid(e) and not e.dead and e != self and e.global_position.distance_to(pos) < 70.0 + e.data.radius:
 			e.take_hit(b * 0.6, (e.global_position - pos).normalized(), 160.0, false, {tags = "pop"})
 	take_hit(b, Vector2.UP, 0.0, false, {tags = "pop", quiet = true})
+
+## Feuerlöscher: Gegner erstarrt zu Eis
+func freeze(t: float) -> void:
+	if dead:
+		return
+	_freeze_t = maxf(_freeze_t, t)
+	stun_t = maxf(stun_t, t)
+	if atk == "windup":
+		_end_attack()
+	rig.stunned = true
+	rig.set_tint(Color(0.55, 0.85, 1.0))
+	rig.squash(1.15, 0.9, 0.3)
+	apply_slow(0.5, t + 2.0)
 
 func stun(t: float) -> void:
 	if dead:
@@ -150,6 +191,12 @@ func _physics_process(delta: float) -> void:
 		slow_mult = minf(slow_mult, 0.2)
 		if glue_t <= 0.0:
 			_glue_pop()
+	if _freeze_t > 0.0:
+		_freeze_t -= delta
+		if _freeze_t <= 0.0:
+			rig.set_tint(base_tint if glue_t <= 0.0 else Color(1.0, 0.55, 0.85))
+	if affix != "":
+		_affix_tick(delta)
 	atk_cd -= delta
 	contact_cd -= delta
 	_bar_t = maxf(0.0, _bar_t - delta)
@@ -168,8 +215,23 @@ func _physics_process(delta: float) -> void:
 	var move := Vector2.ZERO
 	if stun_t <= 0.0:
 		move = _think(delta, to_target, dist, target_ok)
+	# Hängt der Gegner trotz Laufwunsch fest, weicht er kurz seitlich aus
+	if _side_t > 0.0:
+		_side_t -= delta
+		move = move.orthogonal() * _side + move * 0.25
 	velocity = move + kb_vel + _separation() * 70.0
 	move_and_slide()
+	var want := move.length()
+	if want > 20.0 and atk != "act":
+		if get_real_velocity().length() < want * 0.3:
+			_stuck_t += delta
+			if _stuck_t > 0.45:
+				_stuck_t = 0.0
+				_side_t = 0.5
+				_side = 1.0 if randf() < 0.5 else -1.0
+				_nav_t = 0.0
+		else:
+			_stuck_t = maxf(0.0, _stuck_t - delta * 2.0)
 	_after_move(delta)
 	_animate(delta, move)
 	# Kontaktschaden
@@ -232,9 +294,27 @@ func _think(delta: float, to_target: Vector2, dist: float, target_ok: bool) -> V
 		"slam": return _think_slam(delta, to_target, dist, target_ok)
 	return _chase(delta, to_target, dist, target_ok)
 
+## Laufrichtung zum Spieler: direkte Linie bei freier Sicht, sonst entlang des Flussfelds um Hindernisse herum.
+## Wird nur alle ~0,13 s neu berechnet (gestaffelt), dazwischen gilt die letzte Richtung.
+func _seek(to_target: Vector2) -> Vector2:
+	_nav_t -= get_physics_process_delta_time()
+	if _nav_t <= 0.0 or _nav_v == Vector2.ZERO:
+		_nav_t = randf_range(0.1, 0.16)
+		var dir := to_target.normalized()
+		var arena = Game.arena
+		if arena != null and not arena.los(global_position, last_seen, big_nav):
+			var nd: Vector2 = arena.nav_dir(global_position, big_nav)
+			if nd != Vector2.ZERO:
+				dir = nd
+		_nav_v = dir
+	return _nav_v
+
+func _clear_path() -> bool:
+	return Game.arena == null or Game.arena.los(global_position, last_seen, big_nav)
+
 func _chase(delta: float, to_target: Vector2, dist: float, target_ok: bool, mult: float = 1.0) -> Vector2:
 	if target_ok:
-		return to_target.normalized() * spd() * mult
+		return _seek(to_target) * spd() * mult
 	# Ziel verloren: zur letzten bekannten Position, dann herumirren
 	if dist > 26.0:
 		return to_target.normalized() * spd() * 0.5
@@ -258,7 +338,7 @@ func _end_attack() -> void:
 func _think_hop(delta: float, to_target: Vector2, dist: float, target_ok: bool) -> Vector2:
 	match atk:
 		"idle":
-			if atk_cd <= 0.0 and dist < 360.0 and target_ok:
+			if atk_cd <= 0.0 and dist < 360.0 and target_ok and _clear_path():
 				_begin("windup", p("windup", 0.55))
 				act_dir = to_target.normalized()
 				rig.squash(1.35, 0.7, p("windup", 0.55))
@@ -296,7 +376,7 @@ func _think_hop(delta: float, to_target: Vector2, dist: float, target_ok: bool) 
 func _think_charge(delta: float, to_target: Vector2, dist: float, target_ok: bool) -> Vector2:
 	match atk:
 		"idle":
-			if atk_cd <= 0.0 and dist < p("trigger", 440.0) and dist > 90.0 and target_ok:
+			if atk_cd <= 0.0 and dist < p("trigger", 440.0) and dist > 90.0 and target_ok and _clear_path():
 				_begin("windup", p("windup", 0.75))
 				act_dir = to_target.normalized()
 				rig.squash(1.15, 0.78, p("windup", 0.75))
@@ -344,7 +424,7 @@ func _think_ranged(delta: float, to_target: Vector2, dist: float, target_ok: boo
 			if not target_ok:
 				v = _chase(delta, to_target, dist, false)
 			elif dist > pref + 30.0:
-				v = to_target.normalized() * spd()
+				v = _seek(to_target) * spd()
 			elif dist < pref - 70.0:
 				v = -to_target.normalized() * spd() * 0.9
 			else:
@@ -452,6 +532,17 @@ func _mat_color() -> Color:
 func take_hit(dmg: float, dir: Vector2, kb: float, crit: bool, opts: Dictionary = {}) -> void:
 	if dead or spawn_t > 0.2:
 		return
+	if shield > 0 and dmg > 0.0 and not opts.get("quiet", false):
+		# Klassensprecher-Schild: blockt einzelne Treffer und lädt sich wieder auf
+		shield -= 1
+		_shield_t = 6.0
+		_bar_t = 3.0
+		rig.flash(0.1, Color(0.7, 0.8, 1.0))
+		Sfx.play("click", 1.8, -8.0)
+		Juice.float_text_at(global_position, data.height, "Geblockt!", Color(0.8, 0.85, 1.0), 14)
+		return
+	if slow_t > 0.0 and Game.player != null and Game.player.syn_tier("Kunst") >= 2:
+		dmg *= 1.2
 	hp -= dmg
 	_bar_t = 3.0
 	Game.stats.damage_dealt += dmg
@@ -503,6 +594,19 @@ func die(dir: Vector2, crit: bool, tags: String = "") -> void:
 	Game.register_kill()
 	if data.elite:
 		Game.stats.elites += 1
+	if affix != "":
+		Game.stats.champions += 1
+		Juice.hitstop(0.05)
+		Juice.shake(0.3)
+		Juice.float_text_at(global_position, data.height + 10, "%s erledigt!" % Db.affixes[affix].name, Db.affixes[affix].color, 18, true)
+		Juice.ring(global_position, 90.0, Db.affixes[affix].color, 0.35, 6.0, true)
+		if affix == "clown" and not is_mini:
+			for i in 2:
+				var cm := Enemy.create(data, global_position + Vector2.from_angle(randf() * TAU) * 24.0, hp_mult, true)
+				cm.spawn_t = 0.25
+		elif affix == "knall":
+			Hazard.spawn(global_position, {kind = "impact", radius = 100.0, telegraph = 0.75, burst_player = 16.0, kb = 380.0,
+				color = Color(1.0, 0.5, 0.2), pattern = "stripes", from_enemy = true, sound = "explosion"})
 	var pos := global_position
 	var mc := _mat_color()
 	Sfx.play("death", randf_range(0.9, 1.3), -6.0)
@@ -554,6 +658,17 @@ func _burst_open(pos: Vector2) -> void:
 		m.kb_vel = Vector2.from_angle(a) * 380.0
 
 func _drops(pos: Vector2) -> void:
+	if affix != "":
+		# garantierte Beute der Elite-Affixe
+		for i in 3:
+			Pickup.spawn("xp", maxi(1, data.xp), pos + Vector2(0, -8), 150.0)
+		for i in 3:
+			Pickup.spawn("coin", data.coin_value + 1, pos, 140.0)
+		if randf() < 0.35:
+			Pickup.spawn("heal", 18, pos, 100.0)
+		if randf() < 0.07:
+			Pickup.spawn("rare", 1, pos, 60.0)
+		return
 	var orbs := 1 if not data.elite else 5
 	for i in orbs:
 		Pickup.spawn("xp", maxi(1, int(data.xp / float(orbs))) if data.elite else data.xp * (1 if not is_mini else 0), pos + Vector2(0, -8), 140.0)
@@ -574,19 +689,27 @@ func _draw() -> void:
 		_draw_telegraph()
 
 func wants_overlay() -> bool:
-	return not dead and spawn_t <= 0.0 and (data.elite or _bar_t > 0.0 or atk == "windup" or stun_t > 0.0)
+	return not dead and spawn_t <= 0.0 and (data.elite or affix != "" or _bar_t > 0.0 or atk == "windup" or stun_t > 0.0)
 
 ## Bildschirmebene: Gesundheitsbalken und Warndreieck über dem Kopf
 func draw_overlay(c: Control, sp: Vector2) -> void:
 	if dead or spawn_t > 0.0:
 		return
-	var h := data.height * (0.62 if is_mini else 1.0) * 1.12
-	if (data.elite or _bar_t > 0.0) and data.behavior != "boss":
-		var w := 44.0 if data.elite else 32.0
+	var h := data.height * (0.62 if is_mini else 1.0) * 1.12 * rig.size_mul
+	if affix != "":
+		var af: Dictionary = Db.affixes[affix]
+		var f := ThemeDB.fallback_font
+		var ty := sp.y - h - 22.0
+		c.draw_string_outline(f, Vector2(sp.x - 80.0, ty), af.name, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 11, 4, Color(0.05, 0.05, 0.1))
+		c.draw_string(f, Vector2(sp.x - 80.0, ty), af.name, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 11, af.color)
+		for i in shield:
+			c.draw_circle(Vector2(sp.x - 10.0 + i * 10.0, sp.y - h - 4.0), 3.5, Color(0.75, 0.85, 1.0))
+	if (data.elite or affix != "" or _bar_t > 0.0) and data.behavior != "boss":
+		var w := 44.0 if (data.elite or affix != "") else 32.0
 		var y := sp.y - h - 14.0
 		c.draw_rect(Rect2(sp.x - w * 0.5 - 1, y - 1, w + 2, 8), Color(0, 0, 0, 0.8))
 		var frac := clampf(hp / max_hp, 0.0, 1.0)
-		c.draw_rect(Rect2(sp.x - w * 0.5, y, w * frac, 6), Color(1.0, 0.3, 0.25) if data.elite else Color(0.9, 0.2, 0.2))
+		c.draw_rect(Rect2(sp.x - w * 0.5, y, w * frac, 6), Db.affixes[affix].color if affix != "" else (Color(1.0, 0.3, 0.25) if data.elite else Color(0.9, 0.2, 0.2)))
 	if stun_t > 0.0:
 		var t := Time.get_ticks_msec() * 0.006
 		for i in 3:
@@ -620,3 +743,41 @@ func _draw_arrow(d: Vector2, length: float) -> void:
 	draw_line(a, b, Color(1, 0.2, 0.2, pulse), 14.0)
 	var n := d.orthogonal()
 	draw_colored_polygon(PackedVector2Array([b + d * 26.0, b + n * 20.0, b - n * 20.0]), Color(1, 0.2, 0.2, pulse + 0.2))
+
+# ---------------------------------------------------------------- Elite-Affixe
+func _affix_tick(delta: float) -> void:
+	if stun_t > 0.0:
+		return
+	_aff_t -= delta
+	match affix:
+		"streber":
+			if _aff_t <= 0.0:
+				_aff_t = 2.6
+				var healed := 0
+				for e in Game.arena.enemies_near(global_position, 180.0):
+					if e != self and is_instance_valid(e) and not e.dead and e.hp < e.max_hp and e.global_position.distance_to(global_position) < 180.0:
+						e.hp = minf(e.max_hp, e.hp + e.max_hp * 0.1)
+						e._bar_t = 2.0
+						healed += 1
+						if healed <= 6:
+							Juice.burst(e.global_position + Vector2(0, -e.data.height * 0.5), Color(0.4, 1.0, 0.5), 3, 70.0, 0.5, 3.0, 40.0, Vector2.UP, -30.0, "circle")
+				if healed > 0:
+					Juice.ring(global_position, 180.0, Color(0.4, 1.0, 0.5, 0.7), 0.4, 4.0)
+					rig.squash(0.9, 1.15, 0.3)
+		"petze":
+			if _aff_t <= 0.0:
+				_aff_t = 7.5
+				if Game.enemies.size() < 40 and Game.state == Game.State.IN_RUN:
+					Juice.float_text_at(global_position, data.height + 6, "Herr Lehrer!!", Color(1.0, 0.85, 0.3), 16, true)
+					Sfx.play("warn", 1.4, -6.0)
+					rig.squash(0.85, 1.25, 0.35)
+					for i in 2:
+						var pos: Vector2 = Game.arena.clamp_to_arena(global_position + Vector2.from_angle(randf() * TAU) * 60.0)
+						var m: Enemy = Game.arena.spawn_enemy("bird", pos, hp_mult * 0.7)
+						m.spawn_t = 0.3
+		"schild":
+			if shield < 3:
+				_shield_t -= delta
+				if _shield_t <= 0.0:
+					shield = 3
+					Juice.ring(global_position, 50.0, Color(0.75, 0.85, 1.0), 0.3, 4.0)

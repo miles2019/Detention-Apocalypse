@@ -166,6 +166,9 @@ func _physics_process(delta: float) -> void:
 			for n in arena.bins:
 				if is_instance_valid(n):
 					n.try_kick_by_projectile(self)
+			for pr in arena.props_list:
+				if is_instance_valid(pr):
+					pr.try_hit(self)
 	else:
 		_check_player()
 	_update3d(delta)

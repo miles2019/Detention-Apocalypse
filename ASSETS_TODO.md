@@ -47,3 +47,16 @@ Ersetzen: `Sfx.sounds["name"] = load("res://audio/xyz.ogg")`. Audio-Busse: Music
 - `SpriteBatch` (scripts/sprite_batch.gd): Gegner, Münzen, Heil- und XP-Pickups sowie ihre Schatten werden über je ein MultiMesh gezeichnet (Textur-Atlas, Shader `batch_sprite`/`batch_shadow`). Neue Gegnertexturen werden automatisch in den Atlas aufgenommen (Db.enemies).
 - Musik wird beim Start in einem Hintergrund-Thread erzeugt (kein Hänger beim ersten Track).
 - Bot-Flag `--stress`: füllt die Arena bis 70 Gegner und loggt `[PERF]`-Frame-Statistiken (Max-Werte werden durch Hitstop-Zeitskalierung verfälscht, avg/p95 beachten).
+
+## Neu: Bedienung, Wegfindung, Inhalte
+- **Zeugnis** (ui/result_screen.gd): zweispaltig, Buttons fest am unteren Rand (auch `R` = nochmal, `Enter` = Schulhof). Sechs Fachnoten + Gesamtnote, im Endlos-Modus mit Bestenliste.
+- **Hover-Infos** (ui/tooltip.gd, ui/tips.gd, `UIKit.tip(control, titel, text)`): Waffen mit echten Werten je Stufe, Items, Fach-Sets, Werte.
+- **Schülerakte** (ui/stats_screen.gd): `Tab` im Run, Button im Pausemenü und im Kiosk.
+- **Waffen verkaufen** im Kiosk (`Player.sell_weapon`), die letzte Waffe ist gesperrt.
+- **Klassenarbeit**: Neu würfeln (`R`), Bannen, Merken – je Run begrenzt (`Game.lv_rerolls/lv_bans/lv_locks`).
+- **Wegfindung** (scripts/arena.gd, Abschnitt "Wegfindung"): Flussfeld per Breitensuche vom Spieler aus (Raster 32 px, getrennt für kleine/große Gegner), direkte Linie bei freier Sicht, Seitwärtsschritt als Notlösung. Bosse zertrümmern Hindernisse (`Arena.smash_obstacles`).
+- **Zerstörbare Umgebung**: Tische/Regale (`Arena.blast`), Feuerlöscher und Chemieschränke (scripts/objects/arena_prop.gd, 3D-Platzhalter).
+- **Elite-Affixe** (`Db.affixes`), **Fach-Sets** mit zwei Stufen (`Db.sets`), **Endlos-Modus** (`Game.endless`, `DbExtra.endless_wave`).
+- **Charaktere** (`Db.characters`): Frau Kelle und Herr Probe nutzen vorerst die eingefärbte Scrubbs-Grafik – **Platzhalter, eigene Sprites fehlen** (assets/chars/). Tobi und Mia sind leere Plätze.
+- **Projektil-Schweife**: scripts/trail_pool.gd (MultiMesh) statt `GPUParticles3D.emit_particle`, das der Compatibility-Renderer nicht unterstützt.
+- Bot-Flags neu: `--feat` (Verkauf, Tooltip, Akte, Würfeln/Bannen/Merken), `--smash`, `--navtest`, `--endless`, `--fast`, `--stopwave=N`, `--char=<id>`.

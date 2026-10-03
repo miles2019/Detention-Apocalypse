@@ -13,10 +13,12 @@ var _pending := 0
 var _elapsed := 0.0
 var _limit := 60.0
 const MAX_ALIVE := 34
+var _wave_n := 1
 
 func start_wave(n: int) -> void:
 	var chap: Dictionary = Game.chapter_data()
-	var def: Dictionary = chap.waves[n - 1]
+	var def: Dictionary = Game.wave_def(n)
+	_wave_n = n
 	queue.clear()
 	var late: Array = []
 	for id in def.groups:
@@ -30,6 +32,8 @@ func start_wave(n: int) -> void:
 	for id in late:
 		queue.insert(int(queue.size() * randf_range(0.45, 0.8)), id)
 	hp_mult = (1.0 + 0.1 * float(n - 1)) * chap.hp_scale * (1.0 + 0.25 * float(Game.difficulty))
+	if Game.endless:
+		hp_mult = (1.0 + 0.13 * float(n - 1)) * (1.0 + 0.25 * float(Game.difficulty))
 	_interval = def.duration / float(maxi(1, queue.size()))
 	_timer = 0.8
 	_elapsed = 0.0
@@ -67,4 +71,16 @@ func _emit_progress() -> void:
 func _spawn(id: String) -> void:
 	var pos: Vector2 = Game.arena.random_spawn_pos()
 	_pending += 1
-	Game.arena.spawn_with_marker(id, pos, hp_mult, func(): _pending -= 1)
+	# Elite-Affixe: ab Welle 2 erscheinen gelegentlich modifizierte Gegner (höchstens 3 gleichzeitig)
+	var affix := ""
+	var d: EnemyData = Db.enemies[id]
+	if _wave_n >= 2 and not d.elite and id != "locker":
+		var chance := minf(0.2, 0.035 + 0.018 * float(_wave_n) + 0.03 * float(Game.difficulty))
+		var champs := 0
+		for e in Game.enemies:
+			if is_instance_valid(e) and e.affix != "":
+				champs += 1
+		if champs < 3 and randf() < chance:
+			var keys: Array = Db.affixes.keys()
+			affix = keys[randi() % keys.size()]
+	Game.arena.spawn_with_marker(id, pos, hp_mult, func(): _pending -= 1, affix)

@@ -13,6 +13,21 @@ var hub_test := false
 var start_weapon := ""
 var proj_shots := false
 var stress := false
+var endless_arg := false
+var nav_test := false
+var _nav_phase := 0
+var _nav_tt := 0.0
+var _nav_units: Array = []
+var fast := false
+var _fast_t := 0.0
+var stop_wave := 0
+var char_arg := ""
+var feat_test := false
+var smash_test := false
+var _feat_done := false
+var _smash_t := 0.0
+var _stuck := {}
+var _stuck_log := 0.0
 var _stress_t := 0.0
 var _ft := []
 var _ft_t := 0.0
@@ -68,6 +83,20 @@ func _ready() -> void:
 			locker_test = true
 		elif a == "--ui":
 			ui_test = true
+		elif a == "--fast":
+			fast = true
+		elif a.begins_with("--stopwave="):
+			stop_wave = int(a.substr(11))
+		elif a == "--navtest":
+			nav_test = true
+		elif a == "--endless":
+			endless_arg = true
+		elif a.begins_with("--char="):
+			char_arg = a.substr(7)
+		elif a == "--feat":
+			feat_test = true
+		elif a == "--smash":
+			smash_test = true
 		elif a == "--again":
 			again = true
 		elif a.begins_with("--speed="):
@@ -130,6 +159,11 @@ func _process(delta: float) -> void:
 				_acted = true
 				shot("charselect")
 				Game.chapter = chapter_arg
+				Game.endless = endless_arg
+				if char_arg != "":
+					if not Save.data.chars_unlocked.has(char_arg):
+						Save.data.chars_unlocked.append(char_arg)
+					Save.data.character = char_arg
 				if start_weapon != "":
 					Save.data.start_weapon = start_weapon
 				main._start_run()
@@ -157,7 +191,18 @@ func _process(delta: float) -> void:
 			if _state_t > 0.7 and not _acted:
 				_acted = true
 				shot("levelup")
-				main.levelup._pick(randi() % 3)
+				if feat_test and not _feat_done:
+					# Neu würfeln, Merken und Bannen einmal durchspielen
+					_feat_done = true
+					main.levelup._reroll()
+					main.levelup._lock(0)
+					main.levelup._ban(1)
+					print("[AUTOTEST] levelup: rerolls=%d bans=%d locks=%d banned=%s locked=%s" % [Game.lv_rerolls, Game.lv_bans, Game.lv_locks, str(Game.banned), Game.locked_upgrade])
+					get_tree().create_timer(0.6, true, false, true).timeout.connect(func():
+						shot("levelup_tools")
+						main.levelup._pick(2))
+				else:
+					main.levelup._pick(randi() % main.levelup._options.size())
 		S.SHOP:
 			_shop()
 		S.PAUSE:
@@ -199,6 +244,8 @@ func _hub(delta: float) -> void:
 			_hub_t = 0.0
 		elif Game.modal_open and _hub_t > 1.0:
 			shot("hub_" + kinds[idx])
+			if idx == 4 and endless_arg:
+				Save.data.endless = true
 			if idx == 4:
 				Save.data.chapter_selected = chapter_arg
 				if god:
@@ -228,8 +275,32 @@ func _shop() -> void:
 			return
 		Game.add_money(30)
 		for i in 4:
-			if i < main.shop._offers.size():
+			if i < main.shop._offers.size() and (not feat_test or i > 0):
 				main.shop._buy(i)
+		if feat_test:
+			# Hover-Info prüfen: Maus auf die erste Angebotskarte bewegen
+			var mm := InputEventMouseMotion.new()
+			mm.position = Vector2(180, 250)
+			mm.global_position = mm.position
+			get_viewport().warp_mouse(mm.position)
+			Input.parse_input_event(mm)
+			get_tree().create_timer(0.5, true, false, true).timeout.connect(func(): shot("tooltip"))
+			get_tree().create_timer(0.9, true, false, true).timeout.connect(func():
+				var pl = Game.player
+				var before: int = Game.money
+				var n0: int = pl.weapons.size()
+				if n0 > 1:
+					main.shop._sell(pl.weapons[0], main.shop._reroll_btn)
+				print("[AUTOTEST] verkauf: waffen %d -> %d, geld %d -> %d" % [n0, pl.weapons.size(), before, Game.money])
+				# letzte Waffe darf nicht verkauft werden
+				while pl.weapons.size() > 1:
+					pl.sell_weapon(pl.weapons[0])
+				print("[AUTOTEST] letzte waffe verkaufbar: %s (erwartet 0)" % str(pl.sell_weapon(pl.weapons[0])))
+				main.shop._refresh_inventory()
+				main._open_stats())
+			get_tree().create_timer(1.5, true, false, true).timeout.connect(func():
+				shot("stats")
+				main.stats.close())
 		get_tree().create_timer(1.8, true, false, true).timeout.connect(func():
 			if Game.state == Game.State.SHOP:
 				shot("shop_after")
@@ -265,6 +336,83 @@ func _play(delta: float) -> void:
 			_stress_t = 0.12
 			var ids := ["bird", "frog", "rat", "nerd", "sheep", "football", "zombie"]
 			Game.arena.spawn_enemy(ids[randi() % ids.size()], Game.arena.random_spawn_pos(), 3.0)
+	# Wegfindungs-Kontrolle: wie viele Gegner kommen trotz Laufwunsch nicht vom Fleck?
+	_stuck_log += delta
+	if _stuck_log > 1.0:
+		_stuck_log = 0.0
+		var stuck_n := 0
+		for e in Game.enemies:
+			if not is_instance_valid(e) or e.dead:
+				continue
+			var id: int = e.get_instance_id()
+			var last: Vector2 = _stuck.get(id, Vector2(-999, -999))
+			if e.atk == "idle" and e.stun_t <= 0.0 and e.spawn_t <= 0.0 and e.global_position.distance_to(pl.global_position) > 120.0 and e.global_position.distance_to(last) < 6.0 and e.data.behavior in ["chase", "charge", "hop", "slam", "boss"]:
+				stuck_n += 1
+				print("[NAV]   %s bei %s affix=%s hunt=%s side=%.2f navv=%s vel=%s" % [e.data.id, str(e.global_position.round()), e.affix, str(e.hunt), e._side_t, str(e._nav_v), str(e.velocity.round())])
+			_stuck[id] = e.global_position
+		if stuck_n > 0:
+			print("[NAV] festhängende Gegner: %d von %d" % [stuck_n, Game.enemies.size()])
+	if fast and Game.state == Game.State.IN_RUN:
+		# Schnelldurchlauf: Wellen stark verkürzen, Gegner regelmäßig abräumen
+		_fast_t += delta
+		var dq: Array = Game.arena.director.queue
+		while dq.size() > 5:
+			dq.pop_back()
+		if _fast_t > 2.0:
+			_fast_t = 0.0
+			for e in Game.enemies.duplicate():
+				if is_instance_valid(e) and not e.dead and e.active:
+					e.take_hit(99999.0, Vector2.DOWN, 0.0, false)
+		if stop_wave > 0 and Game.wave >= stop_wave and Game.god_mode:
+			Game.god_mode = false
+			pl.take_damage(99999.0, pl.global_position + Vector2(10, 0))
+	if nav_test:
+		# Wegfindungstest: Spieler steht still hinter einem Hindernis, Gegner müssen von der anderen Seite herumlaufen
+		_nav_tt += delta
+		if _nav_phase == 0 and _nav_tt > 2.0:
+			_nav_phase = 1
+			_nav_tt = 0.0
+			Game.arena.director.active = false
+			Game.arena.director.queue.clear()
+			for e in Game.enemies.duplicate():
+				e.queue_free()
+			Game.enemies.clear()
+			pl.weapons.clear()
+			var ob: Rect2 = Game.arena.obstacles[Game.arena.obstacles.size() - 1]
+			pl.global_position = Vector2(ob.get_center().x, ob.end.y + 50.0)
+			var k := 0
+			for id in ["bird", "rat", "frog", "sheep", "locker", "brute", "football", "zombie"]:
+				var e: Enemy = Game.arena.spawn_enemy(id, Vector2(ob.get_center().x - 60.0 + k * 18.0, ob.position.y - 40.0 - (k % 2) * 30.0))
+				e.spawn_t = 0.0
+				_nav_units.append({e = e, id = id, t = -1.0})
+				k += 1
+			print("[NAVTEST] Hindernis %s, Spieler %s" % [str(ob), str(pl.global_position)])
+		elif _nav_phase == 1:
+			for u in _nav_units:
+				if u.t < 0.0 and is_instance_valid(u.e) and u.e.global_position.distance_to(pl.global_position) < 70.0:
+					u.t = _nav_tt
+			if _nav_tt > 4.0 and _nav_tt < 4.1:
+				shot("navtest")
+			if _nav_tt > 16.0:
+				_nav_phase = 2
+				for u in _nav_units:
+					var where := str(u.e.global_position.round()) if is_instance_valid(u.e) else "-"
+					print("[NAVTEST] %s: %s" % [u.id, ("angekommen nach %.1f s" % u.t) if u.t >= 0.0 else ("NICHT angekommen, steht bei " + where)])
+				get_tree().quit()
+		_release_all()
+		return
+	if smash_test and Game.arena != null:
+		_smash_t += delta
+		if _smash_t > 5.0 and _smash_t < 100.0:
+			_smash_t = 100.0
+			print("[AUTOTEST] Hindernisse vorher: %d" % Game.arena.obstacles.size())
+			for pr in Game.arena.props_list:
+				pr.trigger()
+			Game.arena.blast(Vector2(415, 372), 120.0, true, 3)
+			get_tree().create_timer(0.25, true, false, true).timeout.connect(func(): shot("smash"))
+			get_tree().create_timer(1.2, true, false, true).timeout.connect(func():
+				shot("smash_after")
+				print("[AUTOTEST] Hindernisse nachher: %d, zertrümmert=%d" % [Game.arena.obstacles.size(), Game.stats.smashed]))
 	if weapons_test:
 		_wp_t += delta
 		if _wp_t > 3.5:

@@ -1,22 +1,18 @@
 class_name CharSelect
 extends Control
-## Charakterauswahl als Klassenfoto (Vector UI Pack): fünf Karten im Foto-Rahmen, rechts ein Notizbuch mit Werten.
-## Nur Mr. Scrubbs ist spielbar; die anderen sind gesperrte Platzhalter.
+## Charakterauswahl als Klassenfoto (Vector UI Pack): Karten im Foto-Rahmen, rechts ein Notizbuch mit Werten.
+## Spielbar: Mr. Scrubbs, Frau Kelle (Mensa-Köchin), Herr Probe (Referendar) – die beiden letzten kosten Nachsitzen-Marken.
+## Zwei weitere Plätze sind Platzhalter ("bald verfügbar").
 
 signal confirmed(char_id: String)
 signal back_pressed
 
-const CHARS := [
-	{id = "scrubbs", name = "Mr. Scrubbs", title = "Der Hausmeister", unlocked = true,
-		desc = "Ausgewogenes Startprofil. Seine Reinigungs-Aura wischt Säurepfützen auf und verwandelt sie in Heilung.",
-		hp = 3, speed = 3, slots = 4, diff = "Normal", ability = "Reinigungs-Aura",
-		goals = ["Überlebe die Mutierte Schule (Kapitel 1)", "Wische 10 Säurepfützen auf", "Besiege Frau Eisenhart ohne Treffer"]},
-	{id = "justus", name = "Justus", title = "Der Streber", unlocked = false, desc = "+100 % Fernkampfschaden, aber wenig Leben. Mehr XP nach jeder Welle.", hp = 1, speed = 3, slots = 4, diff = "Schwer", ability = "Hausaufgaben", goals = []},
-	{id = "tobi", name = "Tobi", title = "Der Rowdy", unlocked = false, desc = "Schneller Nahkämpfer mit Zwillings-Schleuder-Katapult.", hp = 3, speed = 4, slots = 3, diff = "Mittel", ability = "Rempler", goals = []},
-	{id = "mia", name = "Mia", title = "Die Schulsprecherin", unlocked = false, desc = "Beschwört Klassensprecher-Drohnen mit Papierschnipseln.", hp = 2, speed = 3, slots = 4, diff = "Mittel", ability = "Drohnen", goals = []},
-	{id = "leon", name = "Leon", title = "Der Sport-Profi", unlocked = false, desc = "Sehr viele Lebenspunkte, nur zwei Waffenplätze. Hürden-Sprint.", hp = 5, speed = 4, slots = 2, diff = "Leicht", ability = "Hürdenlauf", goals = []},
+const SOON := [
+	{id = "tobi", name = "Tobi", title = "Der Rowdy", soon = true, desc = "Schneller Nahkämpfer mit Zwillings-Schleuder. Noch im Nachsitzen – bald verfügbar."},
+	{id = "mia", name = "Mia", title = "Die Schulsprecherin", soon = true, desc = "Beschwört Klassensprecher-Drohnen. Noch im Nachsitzen – bald verfügbar."},
 ]
 
+var chars: Array = []
 var _sel := 0
 var _cards: Array = []
 var _portraits: Array = []
@@ -30,6 +26,9 @@ func _ready() -> void:
 	UIKit.full(self)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	for id in ["scrubbs", "kelle", "probe"]:
+		chars.append(Db.characters[id])
+	chars.append_array(SOON)
 	# Titelbanner
 	_banner = Panel.new()
 	_banner.add_theme_stylebox_override("panel", UIKit.sbox("header_blue", 0))
@@ -53,7 +52,7 @@ func _ready() -> void:
 	row.position = Vector2(54, 146)
 	row.add_theme_constant_override("separation", 10)
 	add_child(row)
-	for i in CHARS.size():
+	for i in chars.size():
 		var card := _make_card(i)
 		row.add_child(card)
 		_cards.append(card)
@@ -73,12 +72,21 @@ func _ready() -> void:
 			_busy = false
 			for c in _stamp_holder.get_children():
 				c.queue_free()
+			for i in chars.size():
+				if chars[i].id == Save.data.character:
+					_sel = i
 			_rebuild()
 			for i in _cards.size():
 				UIKit.pop_in(_cards[i], 0.06 * i))
 
+func _playable(i: int) -> bool:
+	return not chars[i].get("soon", false)
+
+func _unlocked(i: int) -> bool:
+	return _playable(i) and Save.char_unlocked(chars[i].id)
+
 func _make_card(i: int) -> Control:
-	var ch: Dictionary = CHARS[i]
+	var ch: Dictionary = chars[i]
 	var p := PanelContainer.new()
 	p.custom_minimum_size = Vector2(142, 470)
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -91,18 +99,20 @@ func _make_card(i: int) -> Control:
 	portrait.draw.connect(func(): _draw_portrait(portrait, i))
 	v.add_child(portrait)
 	_portraits.append(portrait)
-	var nm := UIKit.label(ch.name, 18, UIKit.NAVY if ch.unlocked else Color(0.35, 0.35, 0.4), HORIZONTAL_ALIGNMENT_CENTER)
+	var nm := UIKit.label(ch.name, 17, UIKit.NAVY if _playable(i) else Color(0.35, 0.35, 0.4), HORIZONTAL_ALIGNMENT_CENTER)
 	v.add_child(nm)
-	var tt := UIKit.label(ch.title, 12, UIKit.RED if ch.unlocked else Color(0.4, 0.4, 0.45), HORIZONTAL_ALIGNMENT_CENTER)
+	var tt := UIKit.label(ch.title, 12, UIKit.RED if _playable(i) else Color(0.4, 0.4, 0.45), HORIZONTAL_ALIGNMENT_CENTER)
 	tt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tt.custom_minimum_size = Vector2(110, 32)
 	v.add_child(tt)
-	if not ch.unlocked:
-		var lk := HBoxContainer.new()
-		lk.alignment = BoxContainer.ALIGNMENT_CENTER
-		lk.add_child(UIKit.icon(UIKit.ICON % "key", Vector2(24, 24)))
-		lk.add_child(UIKit.label("gesperrt", 13, UIKit.RED))
-		v.add_child(lk)
+	var lk := HBoxContainer.new()
+	lk.name = "Lock"
+	lk.alignment = BoxContainer.ALIGNMENT_CENTER
+	lk.add_child(UIKit.icon(UIKit.ICON % "key", Vector2(24, 24)))
+	var lt := UIKit.label("", 13, UIKit.RED)
+	lt.name = "LockText"
+	lk.add_child(lt)
+	v.add_child(lk)
 	p.gui_input.connect(func(ev: InputEvent):
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT and not _busy:
 			_select(i))
@@ -112,7 +122,7 @@ func _make_card(i: int) -> Control:
 	return p
 
 func _draw_portrait(c: Control, i: int) -> void:
-	var ch: Dictionary = CHARS[i]
+	var ch: Dictionary = chars[i]
 	var cx := c.size.x * 0.5
 	var bob := absf(sin(_t * 3.0)) * (5.0 if i == _sel else 0.0)
 	# Bodenmarkierung
@@ -121,12 +131,15 @@ func _draw_portrait(c: Control, i: int) -> void:
 		var a := TAU * k / 20.0
 		pts.append(Vector2(cx + cos(a) * 46.0, c.size.y - 14.0 + sin(a) * 10.0))
 	c.draw_colored_polygon(pts, Color(1.0, 0.85, 0.2, 0.7) if i == _sel else Color(0.3, 0.25, 0.15, 0.35))
-	if ch.unlocked:
-		var tex: Texture2D = Db.tex("res://assets/chars/scrubbs.png")
-		var s := 170.0 / float(tex.get_height())
+	if _playable(i):
+		var tex: Texture2D = Db.tex(ch.tex)
+		var s := 128.0 * (float(ch.height) / 66.0) / float(tex.get_height())
 		var sz := tex.get_size() * s
+		var mod: Color = ch.tint
+		if not _unlocked(i):
+			mod = Color(0.16, 0.16, 0.22, 0.95)
 		c.draw_set_transform(Vector2(cx, c.size.y - 20.0 - bob), sin(_t * 5.0) * 0.04 if i == _sel else 0.0, Vector2.ONE)
-		c.draw_texture_rect(tex, Rect2(-sz.x * 0.5, -sz.y, sz.x, sz.y), false)
+		c.draw_texture_rect(tex, Rect2(-sz.x * 0.5, -sz.y, sz.x, sz.y), false, mod)
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	else:
 		var col := Color(0.2, 0.2, 0.28, 0.92)
@@ -139,15 +152,22 @@ func _style_cards() -> void:
 		var sb: StyleBox
 		if i == _sel:
 			sb = UIKit.sbox("slot_yellow", 14)
-		elif CHARS[i].unlocked:
+		elif _unlocked(i):
 			sb = UIKit.sbox("slot_blue", 14)
 		else:
-			sb = UIKit.sbox("slot_purple", 14, Color(0.6, 0.6, 0.7))
+			sb = UIKit.sbox("slot_purple", 14, Color(0.6, 0.6, 0.7) if not _playable(i) else Color(0.85, 0.85, 0.95))
 		_cards[i].add_theme_stylebox_override("panel", sb)
+		var lk: Control = _cards[i].find_child("Lock", true, false)
+		var lt: Label = _cards[i].find_child("LockText", true, false)
+		lk.visible = not _unlocked(i)
+		if _playable(i):
+			lt.text = "%d Marken" % int(chars[i].cost)
+		else:
+			lt.text = "bald"
 
 func _select(i: int) -> void:
 	_sel = i
-	if CHARS[i].unlocked:
+	if _unlocked(i):
 		Sfx.play("click")
 	else:
 		Sfx.play("denied", 1.0, -6.0)
@@ -174,41 +194,46 @@ func _rebuild() -> void:
 	_style_cards()
 	for c in _detail.get_children():
 		c.queue_free()
-	var ch: Dictionary = CHARS[_sel]
+	var ch: Dictionary = chars[_sel]
 	var nb := UIKit.notebook(ch.name, Vector2(440, 676))
 	_detail.add_child(nb.root)
 	var v: VBoxContainer = nb.content
 	v.add_theme_constant_override("separation", 7)
 	v.add_child(UIKit.label(ch.title, 22, UIKit.RED, HORIZONTAL_ALIGNMENT_CENTER))
-	var d := UIKit.label(ch.desc, 15, UIKit.INK)
+	var d := UIKit.label(ch.desc, 14, UIKit.INK)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	d.custom_minimum_size = Vector2(340, 0)
 	v.add_child(d)
-	v.add_child(_bar("Lebenspunkte", ch.hp, 5, "bar_red"))
-	v.add_child(_bar("Tempo", ch.speed, 5, "bar_cyan"))
-	v.add_child(_bar("Waffenplätze", ch.slots, 6, "bar_green"))
-	var ab := HBoxContainer.new()
-	ab.add_theme_constant_override("separation", 8)
-	ab.add_child(UIKit.icon(UIKit.ICON % "energy", Vector2(28, 28)))
-	ab.add_child(UIKit.label("Fähigkeit: " + ch.ability + "   ·   " + ch.diff, 16, UIKit.NAVY))
-	v.add_child(ab)
-	var wr := HBoxContainer.new()
-	wr.add_theme_constant_override("separation", 10)
-	var slot := PanelContainer.new()
-	slot.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 6))
-	slot.custom_minimum_size = Vector2(70, 76)
-	var sw: String = Save.data.start_weapon if ch.id == "scrubbs" else ""
-	if sw != "" and Db.weapons.has(sw):
-		slot.add_child(UIKit.icon(Db.weapons[sw].icon, Vector2(50, 50)))
-	wr.add_child(slot)
-	var wv := VBoxContainer.new()
-	wr.add_child(wv)
-	wv.add_child(UIKit.label("Startwaffe: " + (Db.weapons[sw].display_name if sw != "" and Db.weapons.has(sw) else "?"), 16, UIKit.NAVY))
-	var ag: String = Save.data.ag_selected
-	wv.add_child(UIKit.label("Start-AG: " + (Db.ags[ag].name if ag != "" and Db.ags.has(ag) else "keine"), 15, UIKit.INK))
-	v.add_child(wr)
-	v.add_child(UIKit.label("Meisterschaftsziele", 17, UIKit.RED))
-	if ch.unlocked:
+	if _playable(_sel):
+		var bars: Dictionary = ch.bars
+		v.add_child(_bar("Lebenspunkte", bars.hp, 5, "bar_red"))
+		v.add_child(_bar("Tempo", bars.speed, 5, "bar_cyan"))
+		v.add_child(_bar("Schaden", bars.dmg, 5, "bar_green"))
+		var facts := "Leben %d   ·   Tempo %d %%   ·   Schaden %d %%\nErfahrung %d %%   ·   Flächenradius %d %%" % [
+			int(ch.hp), int(round(float(ch.speed) * 100.0)), int(round(float(ch.dmg) * 100.0)), int(round(float(ch.xp) * 100.0)), int(round(float(ch.area) * 100.0))]
+		v.add_child(UIKit.label(facts, 13, Color("5a2d0c")))
+		var ab := HBoxContainer.new()
+		ab.add_theme_constant_override("separation", 8)
+		ab.add_child(UIKit.icon(UIKit.ICON % "energy", Vector2(28, 28)))
+		ab.add_child(UIKit.label("Fähigkeit: " + ch.ability + "   ·   " + ch.diff, 16, UIKit.NAVY))
+		v.add_child(ab)
+		var wr := HBoxContainer.new()
+		wr.add_theme_constant_override("separation", 10)
+		var slot := PanelContainer.new()
+		slot.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 6))
+		slot.custom_minimum_size = Vector2(70, 76)
+		var sw: String = ch.start_weapon if String(ch.start_weapon) != "" else Save.data.start_weapon
+		if Db.weapons.has(sw):
+			slot.add_child(UIKit.icon(Db.weapons[sw].icon, Vector2(50, 50)))
+			UIKit.tip(slot, Db.weapons[sw].display_name, Tips.weapon(Db.weapons[sw], 1, null, false))
+		wr.add_child(slot)
+		var wv := VBoxContainer.new()
+		wr.add_child(wv)
+		wv.add_child(UIKit.label("Startwaffe: " + (Db.weapons[sw].display_name if Db.weapons.has(sw) else "?"), 16, UIKit.NAVY))
+		var ag: String = Save.data.ag_selected
+		wv.add_child(UIKit.label("Start-AG: " + (Db.ags[ag].name if ag != "" and Db.ags.has(ag) else "keine"), 15, UIKit.INK))
+		v.add_child(wr)
+		v.add_child(UIKit.label("Meisterschaftsziele", 17, UIKit.RED))
 		for g in ch.goals:
 			var gr := HBoxContainer.new()
 			gr.add_theme_constant_override("separation", 6)
@@ -219,7 +244,7 @@ func _rebuild() -> void:
 			gr.add_child(gl)
 			v.add_child(gr)
 	else:
-		var lk := UIKit.label("Gesperrt – benötigt Nachsitzen-Marken (Elite-Gegner & Bosse).", 14, UIKit.RED)
+		var lk := UIKit.label("Dieser Platz auf dem Klassenfoto ist noch leer.", 14, UIKit.RED)
 		lk.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lk.custom_minimum_size = Vector2(340, 0)
 		v.add_child(lk)
@@ -230,25 +255,54 @@ func _rebuild() -> void:
 	btns.alignment = BoxContainer.ALIGNMENT_CENTER
 	btns.add_theme_constant_override("separation", 12)
 	v.add_child(btns)
-	var ok := UIKit.button("Anwesend!", Vector2(210, 60), 26, Color("c8f0b8"))
-	ok.disabled = not ch.unlocked
-	ok.pressed.connect(_confirm)
+	var ok: Button
+	if _playable(_sel) and not _unlocked(_sel):
+		var cost := int(ch.cost)
+		ok = UIKit.button("Freischalten (%d Marken)" % cost, Vector2(250, 60), 17, Color("ffe08a"))
+		ok.disabled = int(Save.data.marken) < cost
+		ok.pressed.connect(_unlock)
+		UIKit.tip(ok, "Freischalten", "Kostet %d Nachsitzen-Marken (du hast %d).\nMarken gibt es für Elite-Gegner, Bosse und Challenges." % [cost, int(Save.data.marken)])
+	else:
+		ok = UIKit.button("Anwesend!", Vector2(210, 60), 26, Color("c8f0b8"))
+		ok.disabled = not _unlocked(_sel)
+		ok.pressed.connect(_confirm)
 	var back := UIKit.button("Zurück", Vector2(140, 60), 22, Color("f4b0a8"))
 	back.pressed.connect(func(): back_pressed.emit())
 	btns.add_child(ok)
 	btns.add_child(back)
 
+func _unlock() -> void:
+	if _busy or not _playable(_sel):
+		return
+	if Save.unlock_char(chars[_sel].id):
+		Sfx.play("levelup", 1.2, -4.0)
+		Juice.shake(0.2)
+		var st := UIKit.stamp("EINGESCHULT", UIKit.GREEN, 60, -10.0)
+		_stamp_holder.add_child(st)
+		st.reset_size()
+		st.position = Vector2(420, 330) - st.size * 0.5
+		UIKit.slam_stamp(st, 0.0)
+		var tw := st.create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		tw.tween_interval(1.0)
+		tw.tween_property(st, "modulate:a", 0.0, 0.3)
+		tw.tween_callback(st.queue_free)
+		_rebuild()
+	else:
+		Sfx.play("denied")
+
 func _confirm() -> void:
-	if _busy or not CHARS[_sel].unlocked:
+	if _busy or not _unlocked(_sel):
 		return
 	_busy = true
+	Save.data.character = chars[_sel].id
+	Save.save_game()
 	var st := UIKit.stamp("ANWESEND", UIKit.GREEN, 72, -12.0)
 	_stamp_holder.add_child(st)
 	st.reset_size()
 	st.position = Vector2(420, 330) - st.size * 0.5
 	UIKit.slam_stamp(st, 0.0)
 	Juice.shake(0.2)
-	get_tree().create_timer(1.1, true).timeout.connect(func(): confirmed.emit(CHARS[_sel].id))
+	get_tree().create_timer(1.1, true).timeout.connect(func(): confirmed.emit(chars[_sel].id))
 
 func _process(_delta: float) -> void:
 	if not is_visible_in_tree():

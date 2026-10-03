@@ -95,6 +95,7 @@ func _weapon_card(id: String) -> Control:
 				shake(p))
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(b)
+	UIKit.tip(p, wd.display_name, Tips.weapon(wd, 1, null, false))
 	return p
 
 func _recipes() -> void:

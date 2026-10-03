@@ -5,6 +5,9 @@ extends Control
 signal resume_pressed
 signal settings_pressed
 signal quit_to_menu_pressed
+signal stats_pressed
+
+var _stats_btn: Button
 
 var _quit_btn: Button
 var _root: Control
@@ -14,12 +17,12 @@ func _ready() -> void:
 	UIKit.full(self)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(UIKit.dim(0.65))
-	var nb := UIKit.notebook("Stunde unterbrochen", Vector2(500, 520))
+	var nb := UIKit.notebook("Stunde unterbrochen", Vector2(500, 590))
 	_root = nb.root
-	_root.position = Vector2(390, 100)
+	_root.position = Vector2(390, 65)
 	add_child(_root)
 	var v: VBoxContainer = nb.content
-	v.add_theme_constant_override("separation", 14)
+	v.add_theme_constant_override("separation", 11)
 	v.add_child(UIKit.label("Der Rektor macht eine Durchsage…", 17, UIKit.RED, HORIZONTAL_ALIGNMENT_CENTER))
 	var b1 := _btn("Weiter lernen", "adventure", Color("c8f0b8"), 68, 26)
 	var b2 := _btn("Hausordnung", "settings", Color("a8c8f8"), 58, 22)
@@ -28,7 +31,11 @@ func _ready() -> void:
 	b2.pressed.connect(func(): settings_pressed.emit())
 	b3.pressed.connect(func(): quit_to_menu_pressed.emit())
 	_quit_btn = b3
-	for b in [b1, b2, b3]:
+	var b4 := _btn("Schülerakte", "tab", Color("ffe08a"), 58, 22)
+	b4.pressed.connect(func(): stats_pressed.emit())
+	UIKit.tip(b4, "Schülerakte [Tab]", "Alle Werte, Waffen, Items und Fach-Sets im Überblick.")
+	_stats_btn = b4
+	for b in [b1, b4, b2, b3]:
 		v.add_child(b)
 	_info = UIKit.label("", 15, Color("5a2d0c"), HORIZONTAL_ALIGNMENT_CENTER)
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -49,6 +56,7 @@ func _btn(text: String, icon_name: String, col: Color, h: float, fs: int) -> But
 	return b
 
 func _update_info() -> void:
+	_stats_btn.visible = Game.state_before_pause != Game.State.HUB
 	if Game.state_before_pause == Game.State.HUB:
 		_info.text = "Schulhof – hier kann dir nichts passieren. Fast nichts."
 	else:

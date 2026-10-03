@@ -16,6 +16,22 @@ func _ready() -> void:
 	atk_cd = 1.5
 	Game.boss_changed.emit(hp, max_hp, true)
 
+## Bosse laufen immer direkt auf Mr. Scrubbs zu – Tische und Regale im Weg werden einfach zertrümmert
+func _seek(to_target: Vector2) -> Vector2:
+	return to_target.normalized()
+
+func _clear_path() -> bool:
+	return true
+
+func _after_move(_delta: float) -> void:
+	if not active:
+		return
+	var dir := velocity.normalized() if velocity.length() > 5.0 else act_dir
+	var n: int = Game.arena.smash_obstacles(global_position + Vector2(0, -data.radius), data.radius * rig.size_mul + 14.0, dir)
+	if n > 0:
+		rig.squash(1.25, 0.82, 0.3)
+		Juice.hitstop(0.04)
+
 func _patterns() -> Array:
 	match data.id:
 		"etz": return ["flasks", "pool", "charge"]
@@ -295,4 +311,7 @@ func die(dir: Vector2, crit: bool, tags: String = "") -> void:
 	Pickup.spawn("rare", 1, global_position, 100.0)
 	Game.stats.bosses += 1
 	super.die(dir, crit, tags)
-	Game.get_tree().create_timer(2.2, true, false, true).timeout.connect(Game.end_run.bind(true))
+	if Game.endless:
+		Game.get_tree().create_timer(2.2, true, false, true).timeout.connect(Game.arena.endless_boss_done)
+	else:
+		Game.get_tree().create_timer(2.2, true, false, true).timeout.connect(Game.end_run.bind(true))

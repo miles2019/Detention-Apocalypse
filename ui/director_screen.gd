@@ -15,10 +15,11 @@ const DIFF_DESC := [
 var _chapters: HBoxContainer
 var _diff: HBoxContainer
 var _info: Label
+var _mode: HBoxContainer
 
 func _init() -> void:
 	title = "Direktorenschild – Stundenplan"
-	window_size = Vector2(1100, 660)
+	window_size = Vector2(1100, 704)
 
 func build() -> void:
 	content.add_child(UIKit.label("Kapitel", 20, UIKit.RED))
@@ -29,6 +30,9 @@ func build() -> void:
 	_diff = HBoxContainer.new()
 	_diff.add_theme_constant_override("separation", 10)
 	content.add_child(_diff)
+	_mode = HBoxContainer.new()
+	_mode.add_theme_constant_override("separation", 10)
+	content.add_child(_mode)
 	_info = UIKit.label("", 15, UIKit.INK)
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_info.custom_minimum_size = Vector2(960, 0)
@@ -60,8 +64,32 @@ func _fill() -> void:
 			Save.save_game()
 			_fill())
 		_diff.add_child(b)
+	for c in _mode.get_children():
+		c.queue_free()
+	_mode.add_child(UIKit.label("Modus:", 20, UIKit.RED))
+	var endless: bool = Save.data.endless
+	var m1 := UIKit.button("Kapitel mit Boss", Vector2(250, 44), 16, Color("c8f0b8") if not endless else Color("f7efc8"))
+	var m2 := UIKit.button("Endlos-Nachsitzen", Vector2(250, 44), 16, Color("c8f0b8") if endless else Color("f7efc8"))
+	UIKit.tip(m1, "Kapitel mit Boss", "5 Wellen, dann der Kapitel-Boss. Ein Sieg schaltet das nächste Kapitel frei.")
+	UIKit.tip(m2, "Endlos-Nachsitzen", "Die Wellen hören nie auf und werden immer härter. Alle 5 Wellen wartet ein Boss.\nZiel: so weit wie möglich kommen – mit lokaler Bestenliste.")
+	m1.pressed.connect(func():
+		Save.data.endless = false
+		Save.save_game()
+		_fill())
+	m2.pressed.connect(func():
+		Save.data.endless = true
+		Save.save_game()
+		Sfx.play("stamp", 1.2, -6.0)
+		_fill())
+	_mode.add_child(m1)
+	_mode.add_child(m2)
+	var best: Array = Save.data.endless_best
+	if not best.is_empty():
+		_mode.add_child(UIKit.label("  Rekord: Welle %d" % int(best[0].wave), 16, UIKit.NAVY))
 	var sel: int = Save.data.difficulty
-	var loadout := "Startwaffe: %s   ·   AG: %s" % [Db.weapons[Save.data.start_weapon].display_name, Db.ags[Save.data.ag_selected].name if Save.data.ag_selected != "" else "keine"]
+	var chd: Dictionary = Save.character()
+	var sw: String = chd.start_weapon if String(chd.start_weapon) != "" else Save.data.start_weapon
+	var loadout := "%s   ·   Startwaffe: %s   ·   AG: %s" % [chd.name, Db.weapons[sw].display_name, Db.ags[Save.data.ag_selected].name if Save.data.ag_selected != "" else "keine"]
 	_info.text = "%s\n%s" % [DIFF_DESC[sel], loadout + "   ·   Höhere Stufen werden nach gewonnenen Runs freigeschaltet."]
 
 func _chapter_card(n: int) -> Control:

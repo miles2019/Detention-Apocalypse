@@ -83,6 +83,7 @@ func _activate() -> void:
 		if kind == "slam":
 			Juice.shake(0.45)
 			Game.arena.room_react(global_position, 1.0)
+		Game.arena.blast(global_position, radius * mul, not from_enemy, 2 if kind == "slam" else 1)
 	if burst_player > 0.0 and pl != null:
 		if pl.global_position.distance_to(global_position) < radius + 10.0:
 			var dir: Vector2 = (pl.global_position - global_position).normalized()

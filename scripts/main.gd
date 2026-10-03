@@ -19,6 +19,9 @@ var workbench: WorkbenchScreen
 var board: BoardScreen
 var ags: AGScreen
 var director: DirectorScreen
+var stats: StatsScreen
+var tooltip: Tooltip
+var _stats_resume := false
 var arena: Arena
 var stage: Stage3D
 var _pending_recipe := {}
@@ -52,9 +55,16 @@ func _ready() -> void:
 	board = BoardScreen.new()
 	ags = AGScreen.new()
 	director = DirectorScreen.new()
-	for s in [menu, charsel, shop, levelup, pause, result, settings, evo, skills, workbench, board, ags, director]:
+	stats = StatsScreen.new()
+	for s in [menu, charsel, shop, levelup, pause, result, settings, evo, skills, workbench, board, ags, director, stats]:
 		ui.add_child(s)
 		s.visible = false
+	tooltip = Tooltip.new()
+	add_child(tooltip)
+	UIKit.tooltip = tooltip
+	stats.closed.connect(_on_stats_closed)
+	shop.stats_requested.connect(_open_stats)
+	pause.stats_pressed.connect(_open_stats)
 	menu.start_pressed.connect(_enter_hub)
 	menu.settings_pressed.connect(func(): settings.visible = true)
 	menu.quit_pressed.connect(func(): get_tree().quit())
@@ -95,6 +105,9 @@ func _on_state(_old: int, s: int) -> void:
 	hubhud.visible = s == S.HUB or (s == S.PAUSE and Game.state_before_pause == S.HUB)
 	if s != S.PAUSE and s != S.MAIN_MENU:
 		settings.visible = false
+	if s != S.PAUSE and s != S.SHOP:
+		stats.visible = false
+		_stats_resume = false
 	match s:
 		S.MAIN_MENU, S.CHARACTER_SELECT, S.HUB:
 			Sfx.play_music("menu")
@@ -141,6 +154,7 @@ func _enter_hub() -> void:
 func _start_from_director() -> void:
 	Game.chapter = int(Save.data.chapter_selected)
 	Game.difficulty = int(Save.data.difficulty)
+	Game.endless = bool(Save.data.endless)
 	_start_run()
 
 func _start_run() -> void:
@@ -148,12 +162,14 @@ func _start_run() -> void:
 		Game.chapter = 1
 	var keep_chapter := Game.chapter
 	var keep_diff := Game.difficulty
+	var keep_endless := Game.endless
 	_free_world()
 	HitStop.reset()
 	Game.modal_open = false
 	Game.reset_run()
 	Game.chapter = keep_chapter
 	Game.difficulty = keep_diff
+	Game.endless = keep_endless
 	Game.player = null
 	stage = Stage3D.new()
 	world.add_child(stage)
@@ -197,10 +213,40 @@ func _close_charsel() -> void:
 	else:
 		Game.change_state(Game.State.MAIN_MENU)
 
+## Schülerakte öffnen (Tab, Pausemenü, Kiosk). Im laufenden Kampf wird dafür pausiert.
+func _open_stats() -> void:
+	if stats.visible or Game.player == null:
+		return
+	var S := Game.State
+	if Game.state == S.IN_RUN or Game.state == S.WAVE_TRANSITION:
+		_stats_resume = true
+		Game.state_before_pause = Game.state
+		Game.change_state(S.PAUSE)
+	elif Game.state != S.PAUSE and Game.state != S.SHOP:
+		return
+	if Game.state == S.PAUSE and Game.state_before_pause == S.HUB:
+		return
+	stats.open()
+
+func _on_stats_closed() -> void:
+	if _stats_resume:
+		_stats_resume = false
+		if Game.state == Game.State.PAUSE:
+			Game.change_state(Game.state_before_pause)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
+		if not stats.visible and not settings.visible and not evo.visible:
+			_open_stats()
+			get_viewport().set_input_as_handled()
+
 func _on_char_confirmed(_id: String) -> void:
 	if Game.state == Game.State.HUB:
 		_close_charsel()
-		Juice.float_text_at(Game.player.global_position, 90.0, "ANWESEND!", Color(0.5, 1.0, 0.6), 24, true)
+		# Schulhof neu betreten, damit die gewählte Figur erscheint
+		_enter_hub()
+		if Game.player != null:
+			Juice.float_text_at(Game.player.global_position, 90.0, "ANWESEND!", Color(0.5, 1.0, 0.6), 24, true)
 	else:
 		_start_run()
 

@@ -4,6 +4,7 @@ extends Control
 
 signal closed
 signal evolution_requested(recipe: Dictionary)
+signal stats_requested
 
 const CARD := Vector2(262, 410)
 
@@ -11,7 +12,7 @@ var _offers: Array = []
 var _cards: Array = []
 var _rerolls := 0
 var _row: HBoxContainer
-var _inv: HBoxContainer
+var _inv: Control
 var _money: Label
 var _reroll_btn: Button
 var _title: Label
@@ -27,7 +28,7 @@ func _ready() -> void:
 	banner.position = Vector2(36, 14)
 	banner.size = Vector2(700, 76)
 	add_child(banner)
-	_title = UIKit.label("Pausenkiosk", 40, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, true)
+	_title = UIKit.label("Pausenkiosk", 30, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, true)
 	_title.position = Vector2(0, 8)
 	_title.size = Vector2(700, 56)
 	banner.add_child(_title)
@@ -47,20 +48,33 @@ func _ready() -> void:
 	_row.add_theme_constant_override("separation", 18)
 	_row.position = Vector2(50, 92)
 	add_child(_row)
-	_inv = HBoxContainer.new()
-	_inv.add_theme_constant_override("separation", 10)
-	_inv.position = Vector2(50, 560)
+	# Unterer Bereich: links der Spind (Waffen verkaufen, Items), rechts Akte / Reroll / Weiter
+	var inv_bg := Panel.new()
+	inv_bg.add_theme_stylebox_override("panel", UIKit.sbox("panel_black", 6, Color(1, 1, 1, 0.9)))
+	inv_bg.position = Vector2(36, 528)
+	inv_bg.size = Vector2(872, 184)
+	inv_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(inv_bg)
+	_inv = Control.new()
+	_inv.position = Vector2(52, 536)
+	_inv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_inv)
-	_reroll_btn = UIKit.button("Radiergummi: neu würfeln", Vector2(340, 58), 20, Color("f4b0d0"))
-	_reroll_btn.position = Vector2(600, 598)
+	var akte := UIKit.button("Schülerakte [Tab]", Vector2(318, 42), 18, Color("a8c8f8"))
+	akte.position = Vector2(926, 530)
+	akte.pressed.connect(func(): stats_requested.emit())
+	UIKit.tip(akte, "Schülerakte", "Alle Werte, Waffen, Items und Fach-Sets im Überblick.")
+	add_child(akte)
+	_reroll_btn = UIKit.button("Radiergummi: neu würfeln", Vector2(318, 50), 17, Color("f4b0d0"))
+	_reroll_btn.position = Vector2(926, 578)
 	_reroll_btn.pressed.connect(_reroll)
+	UIKit.tip(_reroll_btn, "Radiergummi", "Würfelt alle Angebote neu aus. Wird mit jedem Mal teurer.")
 	add_child(_reroll_btn)
-	var go := UIKit.button("Nächste Stunde", Vector2(280, 68), 28, Color("c8f0b8"))
+	var go := UIKit.button("Nächste Stunde", Vector2(318, 68), 28, Color("c8f0b8"))
 	go.icon = UIKit.tex_icon("adventure")
 	go.expand_icon = true
 	go.add_theme_constant_override("icon_max_width", 30)
-	go.add_theme_font_size_override("font_size", 25)
-	go.position = Vector2(960, 590)
+	go.add_theme_font_size_override("font_size", 23)
+	go.position = Vector2(926, 636)
 	go.pressed.connect(func():
 		if not _busy:
 			closed.emit())
@@ -85,7 +99,7 @@ func open() -> void:
 func _update_money() -> void:
 	_money.text = "%d" % Game.money
 	var cost := _reroll_cost()
-	_reroll_btn.text = "Radiergummi: neu würfeln (%d)" % cost
+	_reroll_btn.text = "Neu würfeln (%d Geld)" % cost
 	_reroll_btn.disabled = Game.money < cost
 	for i in _cards.size():
 		_update_card_state(i)
@@ -244,6 +258,15 @@ func _make_card(i: int) -> Control:
 	b.name = "Buy"
 	b.pressed.connect(func(): _buy(i))
 	v.add_child(b)
+	# Hover-Info mit echten Werten
+	if o.kind == "weapon":
+		var wd2: WeaponData = Db.weapons[o.id]
+		var own: WeaponRunner = Game.player.get_weapon(o.id)
+		UIKit.tip(card, wd2.display_name, Tips.weapon(wd2, 1 if own == null else own.level + 1, Game.player, false))
+	else:
+		var u2: UpgradeData = Db.upgrades[o.id]
+		var chg := Tips.upgrade_change(o.id, Game.player)
+		UIKit.tip(card, u2.display_name, Tips.item(u2, Game.player.items.get(o.id, 0), Game.player) + ("\n\n" + chg if chg != "" else ""))
 	return card
 
 func _update_card_state(i: int) -> void:
@@ -296,7 +319,7 @@ func _buy(i: int) -> void:
 	o.sold = true
 	Sfx.play("buy")
 	# Karte wird mit einem "Klack" in ein Spindfach geschoben
-	var target := _inv.position + Vector2(40 + 80 * minf(pl.weapons.size(), 3), 40)
+	var target := _inv.position + Vector2(40 + 86 * minf(pl.weapons.size(), 5), 60)
 	card.pivot_offset = CARD * 0.5
 	var tw := card.create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(card, "scale", Vector2(1.06, 1.06), 0.08)
@@ -310,9 +333,11 @@ func _buy(i: int) -> void:
 		_flash_slot())
 	await get_tree().create_timer(0.55, true).timeout
 	if is_instance_valid(card):
-		card.modulate = Color(1, 1, 1, 0.35)
+		# verkaufte Karte bleibt als unsichtbarer Platzhalter in der Reihe (Layout springt nicht)
+		card.modulate = Color(1, 1, 1, 0.0)
+		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.scale = Vector2.ONE
-		card.global_position = card.global_position
+		_row.queue_sort()
 	_update_money()
 	var r: Dictionary = pl.check_evolution()
 	if not r.is_empty():
@@ -360,26 +385,86 @@ func _refresh_inventory() -> void:
 	for c in _inv.get_children():
 		c.queue_free()
 	var pl = Game.player
-	_inv.add_child(UIKit.label("Dein Spind:", 20, Color("f2e6c4"), HORIZONTAL_ALIGNMENT_LEFT, true))
+	var can_sell: bool = pl.weapons.size() > 1
+	var head := UIKit.label("Dein Spind", 15, Color("f2e6c4"), HORIZONTAL_ALIGNMENT_LEFT, true)
+	head.position = Vector2(0, 0)
+	_inv.add_child(head)
 	for i in pl.slots:
 		var p := PanelContainer.new()
-		p.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 6))
-		p.custom_minimum_size = Vector2(76, 82)
+		p.custom_minimum_size = Vector2(80, 76)
+		p.size = Vector2(80, 76)
+		p.position = Vector2(i * 86.0, 24)
 		if i < pl.weapons.size():
 			var w: WeaponRunner = pl.weapons[i]
+			p.add_theme_stylebox_override("panel", UIKit.sbox("slot_yellow" if w.data.evolution else "slot_blue", 4))
 			var vv := VBoxContainer.new()
 			vv.add_theme_constant_override("separation", 0)
-			vv.add_child(UIKit.icon(w.data.icon, Vector2(54, 46)))
-			vv.add_child(UIKit.label("Stufe %d" % w.level if not w.data.evolution else "EVO", 12, UIKit.INK, HORIZONTAL_ALIGNMENT_CENTER))
+			vv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vv.add_child(UIKit.icon(w.data.icon, Vector2(54, 44)))
+			vv.add_child(UIKit.label("Stufe %d" % w.level if not w.data.evolution else "EVO", 12, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, true))
 			p.add_child(vv)
-		_inv.add_child(p)
-	_inv.add_child(UIKit.label("   Items:", 20, Color("f2e6c4"), HORIZONTAL_ALIGNMENT_LEFT, true))
+			var value: int = pl.sell_value(w)
+			UIKit.tip(p, w.data.display_name, Tips.weapon(w.data, w.level, pl) + "\n\nVerkaufswert: %d Pausengeld" % value)
+			_inv.add_child(p)
+			var sb := UIKit.button("+%d" % value, Vector2(80, 36), 15, Color("f4b0a8"))
+			sb.icon = UIKit.tex_icon("coins")
+			sb.expand_icon = true
+			sb.add_theme_constant_override("icon_max_width", 18)
+			sb.position = Vector2(i * 86.0, 104)
+			sb.disabled = not can_sell
+			UIKit.tip(sb, "Verkaufen", ("%s für %d Pausengeld verkaufen. Das Spindfach wird frei." % [w.data.display_name, value]) if can_sell else "Deine letzte Waffe kannst du nicht verkaufen – eine brauchst du immer.")
+			sb.pressed.connect(func(): _sell(w, sb))
+			_inv.add_child(sb)
+		else:
+			p.add_theme_stylebox_override("panel", UIKit.sbox("slot_purple", 4, Color(0.75, 0.75, 0.85, 0.8)))
+			UIKit.tip(p, "Freies Spindfach", "Hier passt noch eine Waffe hinein.")
+			_inv.add_child(p)
+	var ix := maxf(float(pl.slots), 4.0) * 86.0 + 18.0
+	var il := UIKit.label("Items", 15, Color("f2e6c4"), HORIZONTAL_ALIGNMENT_LEFT, true)
+	il.position = Vector2(ix, 0)
+	_inv.add_child(il)
+	var k := 0
+	var per_row := maxi(3, int((856.0 - ix) / 50.0))
 	for id in pl.items:
 		var u: UpgradeData = Db.upgrades[id]
-		var h := HBoxContainer.new()
-		h.add_child(UIKit.icon(u.icon, Vector2(34, 34)))
-		h.add_child(UIKit.label("x%d" % pl.items[id], 16, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT, true))
-		_inv.add_child(h)
+		var ip := PanelContainer.new()
+		ip.add_theme_stylebox_override("panel", UIKit.sbox("slot_blue", 2))
+		ip.custom_minimum_size = Vector2(46, 46)
+		ip.size = Vector2(46, 46)
+		ip.position = Vector2(ix + (k % per_row) * 50.0, 24 + (k / per_row) * 50.0)
+		var ic := UIKit.icon(u.icon, Vector2(30, 30))
+		ip.add_child(ic)
+		var cnt := UIKit.label("x%d" % pl.items[id], 12, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, true)
+		cnt.size_flags_vertical = Control.SIZE_SHRINK_END
+		ip.add_child(cnt)
+		UIKit.tip(ip, u.display_name, Tips.item(u, pl.items[id], pl))
+		_inv.add_child(ip)
+		k += 1
+	if pl.items.is_empty():
+		var none := UIKit.label("noch keine", 13, Color(0.75, 0.75, 0.85))
+		none.position = Vector2(ix, 30)
+		_inv.add_child(none)
+
+## Waffe verkaufen: Geld zurück, Spindfach wird frei (mindestens eine Waffe bleibt)
+func _sell(w: WeaponRunner, btn: Control) -> void:
+	if _busy:
+		return
+	var v: int = Game.player.sell_weapon(w)
+	if v <= 0:
+		Sfx.play("denied")
+		return
+	Sfx.play("coin", 0.9)
+	Sfx.play("locker", 1.3, -8.0)
+	Juice.shake(0.12)
+	var fl := UIKit.label("+%d" % v, 30, Color(1, 0.9, 0.3), HORIZONTAL_ALIGNMENT_CENTER, true)
+	fl.position = btn.global_position + Vector2(10, -20)
+	add_child(fl)
+	var tw := fl.create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).set_parallel(true)
+	tw.tween_property(fl, "position", Vector2(1040, 30), 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(fl, "modulate:a", 0.2, 0.55)
+	tw.chain().tween_callback(fl.queue_free)
+	_refresh_inventory()
+	_update_money()
 
 func _flash_slot() -> void:
 	Juice.shake(0.15)

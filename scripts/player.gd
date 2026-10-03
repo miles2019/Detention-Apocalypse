@@ -19,6 +19,11 @@ var slots := 4
 var weapons: Array = []
 var items := {}
 var subject_counts := {}
+var char_data := {}
+var area_mult := 1.0
+var kb_base := 1.0
+var _kills_music := 0
+var _kills_heal := 0
 
 var rig: VisualRig
 var aim_dir := Vector2.RIGHT
@@ -60,7 +65,9 @@ func _ready() -> void:
 	add_child(cs)
 	rig = VisualRig.new()
 	add_child(rig)
-	rig.setup(Db.tex("res://assets/chars/scrubbs.png"), 66.0, 44.0)
+	char_data = Save.character()
+	rig.setup(Db.tex(char_data.tex), char_data.height, 44.0)
+	rig.set_tint(char_data.tint)
 	# gehaltene Waffe (schwingt beim Laufen nach) und Waffen-Popup bei Schüssen: Sprite3D-Kinder der Figur
 	_held = rig.bb.add_child_sprite(Db.tex(Db.w_icon(43)), 36.0)
 	_held.position = Vector3(0.2, 0.2, 0.03)
@@ -70,13 +77,17 @@ func _ready() -> void:
 	add_to_group("player")
 	Game.player = self
 	# Meta-Fortschritt aus dem Skilltree (Alte Tafel)
-	max_hp += Save.bonus("max_hp")
+	max_hp = float(char_data.hp) + Save.bonus("max_hp")
 	speed_bonus += Save.bonus("speed")
-	dmg_mult += Save.bonus("dmg")
+	dmg_mult = float(char_data.dmg) + Save.bonus("dmg")
+	area_mult = float(char_data.area)
+	slots = int(char_data.slots)
 	crit += Save.bonus("crit")
 	magnet += Save.bonus("magnet")
 	slots += int(Save.bonus("slots"))
 	var start: String = Save.data.start_weapon
+	if String(char_data.start_weapon) != "":
+		start = char_data.start_weapon
 	if not Game.arena.hub_mode:
 		equip(start if Db.weapons.has(start) else "mop")
 	hp = max_hp
@@ -136,7 +147,7 @@ func _physics_process(delta: float) -> void:
 		w.update(delta)
 
 func move_speed() -> float:
-	var s := BASE_SPEED * (1.0 + speed_bonus + (0.10 if syn("Sport") else 0.0))
+	var s := BASE_SPEED * float(char_data.speed) * (1.0 + speed_bonus + 0.10 * float(syn_tier("Sport")))
 	return s * slow_mult * Game.phase_mod("speed")
 
 func _update_aim() -> void:
@@ -221,6 +232,7 @@ func _afterimage() -> void:
 	g.place(global_position, 0.0)
 	g.set_body(Vector2(_face, 1.0), 0.0)
 	g.set_tint(Color(0.6, 0.85, 1.0, 0.6))
+	g.set_body(Vector2(_face, 1.0), 0.0)
 	g.sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var tw := g.create_tween()
 	tw.tween_method(func(a: float): g.set_tint(Color(0.6, 0.85, 1.0, a)), 0.5, 0.0, 0.25)
@@ -230,7 +242,7 @@ func _start_dash(input: Vector2) -> void:
 	dash_dir = input if input != Vector2.ZERO else aim_dir
 	dash_t = 0.17
 	dash_inv = 0.26
-	dash_cd = 0.85 * (1.0 - Save.bonus("dash_cd"))
+	dash_cd = 0.85 * (1.0 - Save.bonus("dash_cd")) * (0.75 if syn_tier("Sport") >= 2 else 1.0)
 	Sfx.play("dash", randf_range(0.95, 1.1), -4.0)
 	Juice.burst(global_position, Color(0.95, 0.95, 0.9, 0.8), 12, 150.0, 0.55, 4.5, 70.0, -dash_dir, 0.0, "circle", 6.0)
 	# Perfektes Ausweichen: kurz vor einer Gefahr
@@ -280,7 +292,7 @@ func stun(t: float) -> void:
 func roll_damage(base: float, crit_bonus: float) -> Dictionary:
 	var c := crit + crit_bonus + (0.10 if syn("Mathe") else 0.0)
 	var is_crit := randf() < c
-	var d := base * (crit_mult if is_crit else 1.0)
+	var d := base * ((crit_mult + (0.5 if syn_tier("Mathe") >= 2 else 0.0)) if is_crit else 1.0)
 	return {dmg = d, crit = is_crit}
 
 func take_damage(amount: float, from_pos: Vector2, area: bool = false) -> bool:
@@ -288,6 +300,7 @@ func take_damage(amount: float, from_pos: Vector2, area: bool = false) -> bool:
 		return false
 	amount *= Game.phase_mod("enemy_dmg")
 	amount *= 1.0 + 0.15 * float(Game.difficulty)
+	amount *= Game.endless_dmg()
 	hp -= amount
 	iframes = 0.75
 	Game.stats.damage_taken += amount
@@ -416,25 +429,51 @@ func _after_inventory() -> void:
 		var u: UpgradeData = Db.upgrades[id]
 		subject_counts[u.subject] = subject_counts.get(u.subject, 0) + items[id]
 	for s in subject_counts:
-		if s != "Hausmeister" and subject_counts[s] >= 2 and not _syn_seen.has(s):
-			_syn_seen[s] = true
+		var tier := syn_tier(s)
+		var key := "%s%d" % [s, tier]
+		if tier >= 1 and Db.sets.has(s) and not _syn_seen.has(key):
+			_syn_seen[key] = true
 			Game.stats.synergies += 1
-			Game.stamp_requested.emit("Gruppenarbeit: %s!" % s, Db.subject_color(s))
-			Game.announce.emit("Fach-Synergie %s aktiv: %s" % [s, synergy_text(s)], "info")
+			Game.stamp_requested.emit(("Gruppenarbeit: %s!" if tier == 1 else "Leistungskurs: %s!") % s, Db.subject_color(s))
+			Game.announce.emit("Fach-Set %s Stufe %d aktiv: %s" % [s, tier, synergy_text(s, tier)], "info")
 			Sfx.play("levelup", 1.2)
+	kb_mult = kb_base * (1.2 if syn_tier("Hausmeister") >= 1 else 1.0)
 	Game.inventory_changed.emit()
 
 func syn(subject: String) -> bool:
 	return subject_counts.get(subject, 0) >= 2
 
-func synergy_text(s: String) -> String:
-	match s:
-		"Chemie": return "Gegner hinterlassen beim Tod Säureimpulse."
-		"Sport": return "+10 % Tempo."
-		"Mathe": return "+10 % kritische Trefferchance."
-		"Musik": return "Basswellen betäuben öfter."
-		"Kunst": return "Treffer verlangsamen Gegner."
-	return ""
+## Set-Stufe eines Fachs: 0 = inaktiv, 1 = ab 2 Teilen, 2 = ab 4 Teilen
+func syn_tier(subject: String) -> int:
+	var n: int = subject_counts.get(subject, 0)
+	return 2 if n >= 4 else (1 if n >= 2 else 0)
+
+func synergy_text(s: String, tier: int = 1) -> String:
+	if not Db.sets.has(s):
+		return ""
+	return Db.sets[s][clampi(tier - 1, 0, 1)]
+
+## Rückkaufwert einer Waffe im Kiosk
+func sell_value(w: WeaponRunner) -> int:
+	if w.data.evolution:
+		return 22
+	var base := maxf(float(w.data.price), 8.0)
+	return maxi(3, int(round((base + float(w.level - 1) * base * 0.6) * 0.5)))
+
+## Waffe verkaufen (mindestens eine Waffe bleibt immer im Spind). Gibt den Erlös zurück, 0 = nicht möglich.
+func sell_weapon(w: WeaponRunner) -> int:
+	if weapons.size() <= 1 or not weapons.has(w):
+		return 0
+	var v := sell_value(w)
+	w.free_visuals()
+	weapons.erase(w)
+	Game.money += v
+	Game.money_changed.emit(Game.money)
+	Game.stats.sold += 1
+	_held.texture = Db.tex(weapons[0].data.icon)
+	_held.pixel_size = 36.0 * Stage3D.S / float(_held.texture.get_height())
+	_after_inventory()
+	return v
 
 ## Evolution: gibt das passende Rezept zurück, wenn beide Waffen Stufe >= 2 haben
 func check_evolution() -> Dictionary:
@@ -469,10 +508,28 @@ func debug_give_evolution() -> void:
 ## Kills: Fach-Synergie Chemie 2 -> Säureimpuls
 func on_kill(pos: Vector2, tags: String) -> void:
 	if syn("Chemie") and tags != "pulse":
+		var big := syn_tier("Chemie") >= 2
+		var pr := 125.0 if big else 85.0
 		for e in Game.enemies.duplicate():
-			if is_instance_valid(e) and not e.dead and e.global_position.distance_to(pos) < 85.0:
-				e.take_hit(10.0, (e.global_position - pos).normalized(), 120.0, false, {tags = "pulse"})
-		Juice.ring(pos, 85.0, Color(0.5, 1, 0.3, 0.8), 0.3, 4.0)
+			if is_instance_valid(e) and not e.dead and e.global_position.distance_to(pos) < pr:
+				e.take_hit(18.0 if big else 10.0, (e.global_position - pos).normalized(), 120.0, false, {tags = "pulse"})
+		Juice.ring(pos, pr, Color(0.5, 1, 0.3, 0.8), 0.3, 4.0)
+	# Musik-Set Stufe 2: jeder 10. Kill löst eine Schockwelle aus
+	if syn_tier("Musik") >= 2 and tags != "pulse":
+		_kills_music += 1
+		if _kills_music >= 10:
+			_kills_music = 0
+			Shockwave.create(Juice.fx_parent(), global_position + Vector2(0, -14), {
+				team = "player", max_radius = 210.0 * area_mult, duration = 0.4, damage = 22.0 * dmg_mult, knockback = 420.0,
+				stun = 0.8, stun_chance = 0.5, color = Db.subject_color("Musik"), weapon_id = "set_musik"})
+			Juice.float_text_at(global_position, 100.0, "Zugabe!", Db.subject_color("Musik"), 20, true)
+			Sfx.play("shoot_mega", 1.2, -4.0)
+	# Hausmeister-Set Stufe 2: Aufräumen heilt
+	if syn_tier("Hausmeister") >= 2:
+		_kills_heal += 1
+		if _kills_heal >= 6:
+			_kills_heal = 0
+			heal(3.0)
 
 # ---------------------------------------------------------------- Kosmetik
 func show_weapon(d: WeaponData, dir: Vector2) -> void:

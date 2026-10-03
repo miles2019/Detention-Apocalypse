@@ -31,9 +31,9 @@ var _blackout := 0.0
 var _fx_phase: CPUParticles3D
 var _fx_event: CPUParticles3D
 var _post_tw: Tween
-var _trail_s: GPUParticles3D
-var _trail_b: GPUParticles3D
-var _flash_fx: GPUParticles3D
+var _trail_s: TrailPool
+var _trail_b: TrailPool
+var _flash_fx: TrailPool
 
 func _ready() -> void:
 	ground = SubViewport.new()
@@ -89,64 +89,37 @@ func _ready() -> void:
 func _apply_canvas_scale() -> void:
 	ground.canvas_transform = Transform2D(0.0, Vector2(GSCALE, GSCALE), 0.0, Vector2.ZERO)
 
-## Persistente Emitter für Projektil-Schweife und Mündungs-/Trefferblitze (emit_particle: sehr günstig)
+## Partikel-Pools für Projektil-Schweife und Mündungs-/Trefferblitze (je ein MultiMesh, sehr günstig)
 func _build_emitters() -> void:
-	_trail_s = _emitter(0.5, 1.0, 600, true, true)
-	_trail_b = _emitter(0.7, 1.9, 200, true, true)
-	_flash_fx = _emitter(0.16, 3.4, 80, false)
-
-func _emitter(life: float, size: float, amount: int, fade_scale: bool, smoke: bool = false) -> GPUParticles3D:
-	var p := GPUParticles3D.new()
-	p.emitting = false
-	p.amount = amount
-	p.lifetime = life
-	p.local_coords = false
-	p.explosiveness = 0.0
-	p.visibility_aabb = AABB(Vector3(-2, -1, -2), Vector3(22, 6, 16))
-	var pm := ParticleProcessMaterial.new()
-	pm.gravity = Vector3.ZERO
-	pm.initial_velocity_min = 0.0
-	pm.initial_velocity_max = 0.0
-	pm.scale_min = size * 1.8
-	pm.scale_max = size * 1.8
-	var curve := Curve.new()
-	curve.add_point(Vector2(0, 1.0))
-	curve.add_point(Vector2(1, 0.0 if fade_scale else 0.4))
-	var ct := CurveTexture.new()
-	ct.curve = curve
-	pm.scale_curve = ct
-	var grad := Gradient.new()
-	grad.set_color(0, Color(1, 1, 1, 0.9))
-	grad.set_color(1, Color(1, 1, 1, 0.0))
-	var gt := GradientTexture1D.new()
-	gt.gradient = grad
-	pm.color_ramp = gt
-	p.process_material = pm
-	var qm := QuadMesh.new()
-	qm.size = Vector2(S, S)
+	_trail_s = TrailPool.new()
+	var sm := ShaderMaterial.new()
+	sm.shader = load("res://effects/trail_smoke.gdshader")
+	sm.set_shader_parameter("noise_tex", Juice.smoke_material().get_shader_parameter("noise_tex"))
+	_trail_s.setup(420, 0.42, true, sm)
+	add_child(_trail_s)
+	_trail_b = TrailPool.new()
+	_trail_b.setup(160, 0.6, true, sm)
+	add_child(_trail_b)
 	var mt := StandardMaterial3D.new()
 	mt.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mt.vertex_color_use_as_albedo = true
-	mt.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mt.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mt.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mt.albedo_texture = Juice.circle_tex()
 	mt.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mt.particles_anim_h_frames = 1
-	mt.particles_anim_v_frames = 1
-	qm.material = Juice.smoke_material() if smoke else mt
-	p.draw_pass_1 = qm
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(p)
-	return p
+	_flash_fx = TrailPool.new()
+	_flash_fx.setup(80, 0.16, false, mt)
+	add_child(_flash_fx)
 
 func emit_trail(p2: Vector2, lift_px: float, color: Color, big: bool = false) -> void:
-	var e := _trail_b if big else _trail_s
-	e.emit_particle(Transform3D(Basis(), to3(p2, lift_px)), Vector3.ZERO, color, Color(), GPUParticles3D.EMIT_FLAG_POSITION | GPUParticles3D.EMIT_FLAG_COLOR)
+	if big:
+		_trail_b.emit(to3(p2, lift_px), color, 0.34)
+	else:
+		_trail_s.emit(to3(p2, lift_px), color, 0.17)
 
 ## Mündungs-/Trefferblitz: kurz aufleuchtender Lichtball
 func flash_at(p2: Vector2, lift_px: float, color: Color, size: float = 1.0) -> void:
-	for i in maxi(1, int(round(size))):
-		_flash_fx.emit_particle(Transform3D(Basis(), to3(p2, lift_px)), Vector3.ZERO, color, Color(), GPUParticles3D.EMIT_FLAG_POSITION | GPUParticles3D.EMIT_FLAG_COLOR)
+	_flash_fx.emit(to3(p2, lift_px), color, 0.3 + 0.16 * size)
 
 func _build_environment() -> void:
 	var we := WorldEnvironment.new()
@@ -332,7 +305,10 @@ func _build_desk(r: Rect2, style: String = "classroom") -> void:
 		if not OS.get_cmdline_user_args().has("--nodesktrans"):
 			mt.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
 		mats.append(mt)
-	_desks.append({rect = r2, mats = mats, alpha = 1.0})
+	var nodes: Array = []
+	for i in range(first, props.get_child_count()):
+		nodes.append(props.get_child(i))
+	_desks.append({rect = r2, mats = mats, alpha = 1.0, src = r, nodes = nodes})
 
 ## Schulhof-Hub: Backsteinfassade, Hecken, Bäume, Basketballkorb, Bänke
 func build_hub() -> void:
@@ -421,7 +397,40 @@ func _build_shelf(r: Rect2) -> void:
 		var mt2: StandardMaterial3D = props.get_child(i).material_override
 		mt2.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
 		mats.append(mt2)
-	_desks.append({rect = Rect2(r.position, r.size), mats = mats, alpha = 1.0, tall = true})
+	var nodes: Array = []
+	for i in range(first, props.get_child_count()):
+		nodes.append(props.get_child(i))
+	_desks.append({rect = Rect2(r.position, r.size), mats = mats, alpha = 1.0, tall = true, src = r, nodes = nodes})
+
+## Tisch/Regal zerbricht: Einzelteile fliegen auseinander und verschwinden
+func destroy_desk(src: Rect2, dir: Vector2) -> void:
+	for d in _desks:
+		if d.src == src:
+			_desks.erase(d)
+			for n in d.nodes:
+				if not is_instance_valid(n):
+					continue
+				var mi: MeshInstance3D = n
+				var fly := Vector3(dir.x * 0.9 + randf_range(-0.7, 0.7), randf_range(0.5, 1.3), dir.y * 0.9 + randf_range(-0.7, 0.7))
+				var tw := mi.create_tween().set_parallel(true)
+				tw.tween_property(mi, "position", mi.position + fly, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tw.tween_property(mi, "rotation", Vector3(randf_range(-4, 4), randf_range(-4, 4), randf_range(-4, 4)), 0.55)
+				tw.tween_property(mi, "scale", Vector3(0.05, 0.05, 0.05), 0.3).set_delay(0.3)
+				tw.chain().tween_callback(mi.queue_free)
+			return
+
+## Tisch wackelt (beschädigt, aber noch nicht kaputt)
+func shake_desk(src: Rect2) -> void:
+	for d in _desks:
+		if d.src == src:
+			for n in d.nodes:
+				if is_instance_valid(n):
+					var mi: MeshInstance3D = n
+					var base := mi.position
+					var tw := mi.create_tween()
+					tw.tween_property(mi, "position", base + Vector3(randf_range(-0.05, 0.05), 0.06, randf_range(-0.05, 0.05)), 0.05)
+					tw.tween_property(mi, "position", base, 0.18).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+			return
 
 ## Hübsche Aufsatz-Meshes für Mülleimer / Tafel (von den Objekt-Skripten genutzt)
 func make_mesh_node(mesh: Mesh, color: Color) -> MeshInstance3D:

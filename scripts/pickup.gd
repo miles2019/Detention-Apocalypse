@@ -133,7 +133,7 @@ func collect(pl: Node) -> void:
 			Juice.float_text_at(global_position, 20, "+%d" % value, Color(1, 0.85, 0.2), 16)
 			Juice.burst(global_position, Color(1, 0.85, 0.2), 4, 90.0, 0.3, 2.5)
 		"heal":
-			pl.heal(float(value))
+			pl.heal(float(value) * float(pl.char_data.heal))
 		"rare":
 			Game.pending_levelups += 1
 			Juice.float_text_at(global_position, 40, "A+ ! Gratis-Upgrade", Color(1, 0.9, 0.3), 20, true)

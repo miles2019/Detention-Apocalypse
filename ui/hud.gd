@@ -260,14 +260,17 @@ func _draw_hud() -> void:
 	# ------- Welle rechts
 	var wr := Rect2(1280 - 14 - 232, 14, 232, 72)
 	c.draw_style_box(UIKit.box(Color(0.96, 0.9, 0.76, 0.96), Color("5a4630"), 4, 10, 6), wr)
-	if Game.wave > Game.TOTAL_WAVES:
+	if Game.arena != null and Game.arena.boss_fight:
 		_txt(wr.position + Vector2(14, 32), "BOSSKAMPF", 24, Color(1, 0.4, 0.3))
 		_txt(wr.position + Vector2(14, 58), "Gegner: %d" % Game.enemies.size(), 17, Color.WHITE)
 	else:
-		_txt(wr.position + Vector2(14, 32), "Welle %d / %d" % [maxi(1, Game.wave), Game.TOTAL_WAVES], 24, Color(1, 0.95, 0.8))
+		if Game.endless:
+			_txt(wr.position + Vector2(14, 32), "Endlos: Welle %d" % maxi(1, Game.wave), 21, Color(1, 0.95, 0.8))
+		else:
+			_txt(wr.position + Vector2(14, 32), "Welle %d / %d" % [maxi(1, Game.wave), Game.TOTAL_WAVES], 24, Color(1, 0.95, 0.8))
 		var remaining: int = _wave_info.alive + _wave_info.left
 		_txt(wr.position + Vector2(14, 58), "Gegner: %d" % remaining, 17, Color.WHITE)
-		for i in Game.TOTAL_WAVES:
+		for i in (0 if Game.endless else Game.TOTAL_WAVES):
 			var col := Color(0.4, 0.8, 0.4) if i < Game.wave - 1 else (Color(1, 0.8, 0.2) if i == Game.wave - 1 else Color(0.35, 0.3, 0.3))
 			c.draw_circle(wr.position + Vector2(130 + i * 18, 52), 6.0, col)
 			c.draw_arc(wr.position + Vector2(130 + i * 18, 52), 6.0, 0, TAU, 12, Color(0.1, 0.1, 0.1), 1.5)
@@ -279,8 +282,9 @@ func _draw_hud() -> void:
 		c.draw_rect(Rect2(br.position, Vector2(br.size.x * clampf(_boss.ghost, 0, 1), br.size.y)), Color(1, 0.95, 0.85))
 		c.draw_rect(Rect2(br.position, Vector2(br.size.x * clampf(_boss.hp / _boss.max, 0, 1), br.size.y)), Color(0.9, 0.2, 0.2))
 		c.draw_line(Vector2(br.position.x + br.size.x * 0.5, br.position.y - 4), Vector2(br.position.x + br.size.x * 0.5, br.position.y + 30), Color.WHITE, 2.0)
-		var cd: Dictionary = Game.arena.chapter if Game.arena != null else {boss_name = "Boss", boss_title = ""}
-		_txt(Vector2(br.position.x, br.position.y - 8), "%s – %s" % [cd.boss_name, cd.boss_title], 18, Color(1, 0.9, 0.7))
+		var bn: String = Game.arena.boss_name if Game.arena != null else "Boss"
+		var bt: String = Game.arena.boss_title_txt if Game.arena != null else ""
+		_txt(Vector2(br.position.x, br.position.y - 8), "%s – %s" % [bn, bt], 18, Color(1, 0.9, 0.7))
 	# ------- Schulregel / Event
 	var chip_y := 96.0
 	if Game.arena != null and Game.arena.events != null and Game.arena.events.active != "":
@@ -336,23 +340,30 @@ func _draw_hud() -> void:
 	c.draw_arc(dr, 19.0, -PI / 2, -PI / 2 + TAU * dfrac, 24, Color(0.6, 0.9, 1.0) if dfrac >= 1.0 else Color(0.5, 0.5, 0.6), 4.0)
 	_txt(dr + Vector2(-16, 6), ">>", 16, Color.WHITE)
 	_txt(dr + Vector2(-24, 38), Game.key_label("dash"), 11, Color(0.8, 0.85, 0.95), HORIZONTAL_ALIGNMENT_CENTER, 48.0)
+	_txt(Vector2(16, 706), "[Tab] Schülerakte", 12, Color(0.85, 0.88, 0.98, 0.8))
 	# Fach-Synergien (Symbol + Zähler)
 	var sx := x0 + total_w + 14.0
 	var sy := y0
 	for s in pl.subject_counts:
-		if s == "Hausmeister":
+		if not Db.sets.has(s):
 			continue
 		var cnt: int = pl.subject_counts[s]
 		var active: bool = cnt >= 2
-		var chip := Rect2(sx, sy, 96, 22)
+		var chip := Rect2(sx, sy, 112, 22)
 		c.draw_rect(chip, Color(0.1, 0.12, 0.2, 0.85))
 		c.draw_rect(chip, Db.subject_color(s) if active else Color(0.4, 0.4, 0.45), false, 2.0)
 		_tex(Db.subject_icon(s), Rect2(chip.position + Vector2(2, 1), Vector2(20, 20)))
-		_txt(chip.position + Vector2(26, 17), ("%s %d/2" % [s, cnt]) if cnt < 2 else ("%s aktiv" % s), 12, Color.WHITE if active else Color(0.7, 0.7, 0.75))
+		var sn: String = "Hausm." if s == "Hausmeister" else s
+		var ct := "%s %d/2" % [sn, cnt]
+		if cnt >= 4:
+			ct = "%s II" % sn
+		elif cnt >= 2:
+			ct = "%s I %d/4" % [sn, cnt]
+		_txt(chip.position + Vector2(26, 17), ct, 12, Color.WHITE if active else Color(0.7, 0.7, 0.75))
 		sy += 25.0
 		if sy > y0 + SLOT:
 			sy = y0
-			sx += 100.0
+			sx += 116.0
 	# ------- Fadenkreuz
 	if Game.state == Game.State.IN_RUN or Game.state == Game.State.WAVE_TRANSITION:
 		var m := get_viewport().get_mouse_position()

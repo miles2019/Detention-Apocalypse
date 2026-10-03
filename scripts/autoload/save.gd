@@ -35,6 +35,10 @@ func _defaults() -> void:
 		challenges = {},       # id -> {progress, claimed}
 		archive = {enemies = [], weapons = [], evolutions = []},
 		tutorial_seen = false,
+		character = "scrubbs",
+		chars_unlocked = ["scrubbs"],
+		endless = false,
+		endless_best = [],      # Bestenliste Endlos: [{wave, kills, time, char}]
 	}
 
 func load_game() -> void:
@@ -122,6 +126,35 @@ func unlock_weapon(id: String) -> void:
 	if not data.weapons_unlocked.has(id):
 		data.weapons_unlocked.append(id)
 		save_game()
+
+func char_unlocked(id: String) -> bool:
+	return data.chars_unlocked.has(id)
+
+func unlock_char(id: String) -> bool:
+	if char_unlocked(id):
+		return true
+	if not spend_marken(int(Db.characters[id].cost)):
+		return false
+	data.chars_unlocked.append(id)
+	save_game()
+	return true
+
+func character() -> Dictionary:
+	var id: String = data.character
+	if not Db.characters.has(id) or not char_unlocked(id):
+		id = "scrubbs"
+	return Db.characters[id]
+
+## Endlos-Ergebnis in die lokale Bestenliste eintragen; gibt den Platz (1-basiert) oder 0 zurück
+func add_endless_score(wave: int, kills: int, time: float, char_name: String) -> int:
+	var entry := {wave = wave, kills = kills, time = time, char = char_name}
+	var list: Array = data.endless_best
+	list.append(entry)
+	list.sort_custom(func(a, b): return a.wave > b.wave or (a.wave == b.wave and a.kills > b.kills))
+	var rank := list.find(entry) + 1
+	while list.size() > 5:
+		list.pop_back()
+	return rank if rank <= 5 else 0
 
 func ag_unlocked(id: String) -> bool:
 	return data.ags_unlocked.has(id)
